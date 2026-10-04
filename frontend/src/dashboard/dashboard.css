@@ -1,0 +1,1479 @@
+/*
+  FloodLine responder console.
+  A dark, quiet slate (river at night) where the four urgency colors are the only saturated things
+  on screen. The map is the hero: OSM tiles are inverted and desaturated so pins read from the back
+  of a room. Everything is scoped under .fl-dash.
+*/
+
+.fl-dash {
+  --bg: #0e1419;
+  --panel: #131b22;
+  --raise: #1a242d;
+  --raise-2: #212d38;
+  --line: #25313b;
+  --line-strong: #3a4956;
+  --ink: #edf1f4;
+  --ink-2: #c9d2d9;
+  --muted: #93a0ab;
+  --faint: #62707c;
+  --focus: #edf1f4;
+  --radius: 6px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Archivo', system-ui, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Arabic', Tahoma, sans-serif;
+  /* 14.6 px at 1366 wide, about 17 px on a 1920 projector. */
+  font-size: clamp(14px, 0.45vw + 8.5px, 18px);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+.fl-dash h2,
+.fl-dash h3,
+.fl-dash p,
+.fl-dash dl,
+.fl-dash dd {
+  margin: 0;
+}
+
+.fl-dash button {
+  color: inherit;
+  cursor: pointer;
+}
+
+.fl-dash button:disabled {
+  cursor: default;
+}
+
+.fl-dash :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Level color as a custom property, so badges, gauges and toasts share one rule. */
+.fl-dash .is-critical { --lvl: var(--fl-critical); }
+.fl-dash .is-high { --lvl: var(--fl-high); }
+.fl-dash .is-medium { --lvl: var(--fl-medium); }
+.fl-dash .is-low { --lvl: var(--fl-low); }
+.fl-dash .is-pending { --lvl: var(--fl-pending); }
+
+/* ---------- Buttons ---------- */
+
+.fl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  min-height: 2.35em;
+  padding: 0.35em 0.9em;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--raise);
+  font-weight: 600;
+  font-size: 0.93em;
+  white-space: nowrap;
+  transition: background-color 120ms, border-color 120ms;
+}
+
+/* Quiet buttons lighten their fill on hover; filled ones (pressed, primary, danger, storm on) just brighten. */
+.fl-btn:where(:not(.is-primary, .is-danger, .is-on, [aria-pressed='true'])):hover:not(:disabled) {
+  background: var(--raise-2);
+  border-color: var(--muted);
+}
+
+.fl-btn:where(.is-primary, .is-danger, .is-on, [aria-pressed='true']):hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.fl-btn:disabled {
+  opacity: 0.55;
+}
+
+.fl-btn[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.fl-btn.is-primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.fl-btn.is-ghost {
+  background: transparent;
+}
+
+.fl-btn.is-danger {
+  background: var(--fl-critical);
+  border-color: var(--fl-critical);
+  color: var(--bg);
+}
+
+.fl-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1em;
+  height: 2.1em;
+  flex: none;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+}
+
+.fl-icon-btn:hover {
+  color: var(--ink);
+  background: var(--raise-2);
+}
+
+.fl-link-btn {
+  padding: 0.2em 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+
+.fl-link-btn:hover:not(:disabled) {
+  color: var(--ink);
+  text-decoration-color: var(--ink);
+}
+
+/* ---------- Header ---------- */
+
+.fl-head {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6em 1.6em;
+  padding: 0.55em 1em;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  z-index: 2;
+}
+
+/* Storm mode: a slow hazard stripe along the bottom edge of the header. */
+.fl-head.is-storm::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 4px;
+  background: repeating-linear-gradient(-45deg, var(--fl-critical) 0 10px, transparent 10px 20px);
+  background-size: 28.28px 4px;
+  animation: fl-stripe 1.2s linear infinite;
+}
+
+@keyframes fl-stripe {
+  to {
+    background-position: 28.28px 0;
+  }
+}
+
+.fl-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.1em;
+}
+
+/* Wordmark: a wide, heavy "Flood" over the four-level scale the whole product is about. */
+.fl-wordmark {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 5px;
+  font-size: 1.45em;
+  font-weight: 850;
+  font-stretch: 125%;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.fl-wordmark-line {
+  font-weight: 300;
+  font-stretch: 100%;
+}
+
+.fl-wordmark::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--fl-critical) 0 25%,
+    var(--fl-high) 25% 50%,
+    var(--fl-medium) 50% 75%,
+    var(--fl-low) 75% 100%
+  );
+}
+
+.fl-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.88em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.fl-live-dot {
+  position: relative;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.fl-live.is-live {
+  color: var(--ink-2);
+}
+
+.fl-live.is-live .fl-live-dot {
+  background: var(--ink);
+}
+
+.fl-live.is-live .fl-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  animation: fl-breathe 2.4s var(--ease) infinite;
+}
+
+.fl-live.is-polling .fl-live-dot {
+  background: var(--fl-medium);
+}
+
+.fl-live.is-connecting .fl-live-dot {
+  animation: fl-blink 1s steps(2) infinite;
+}
+
+@keyframes fl-breathe {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes fl-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.fl-counters {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.fl-counters > div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: center;
+  padding: 0 1.1em;
+  border-left: 1px solid var(--line);
+}
+
+.fl-counters > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.fl-counters dt {
+  font-size: 0.78em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.fl-counters dd {
+  font-size: 1.6em;
+  font-weight: 700;
+  font-stretch: 80%;
+  line-height: 1.05;
+}
+
+.fl-counters .is-critical dd {
+  color: var(--fl-critical);
+}
+
+.fl-counters .is-busy dd {
+  color: var(--ink);
+  animation: fl-blink 1.4s steps(2) infinite;
+}
+
+.fl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  margin-left: auto;
+}
+
+.fl-storm-btn.is-on,
+.fl-storm-btn.is-on[aria-pressed='true'] {
+  background: var(--fl-critical);
+  border-color: var(--fl-critical);
+  color: var(--bg);
+}
+
+.fl-storm-label {
+  font-weight: 800;
+}
+
+.fl-storm-n {
+  font-weight: 500;
+}
+
+.fl-storm-stop {
+  padding-left: 0.6em;
+  border-left: 1px solid rgba(14, 20, 25, 0.4);
+  font-weight: 700;
+}
+
+.fl-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.2em 0.2em 0.2em 0.7em;
+  border: 1px solid var(--fl-critical);
+  border-radius: var(--radius);
+}
+
+.fl-confirm-q {
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+/* ---------- Main layout ---------- */
+
+.fl-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 520px);
+  min-height: 0;
+}
+
+.fl-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.fl-side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+}
+
+/* ---------- Map ---------- */
+
+/* Explicit height: Leaflet measures its container once and draws nothing into a 0 px box. */
+.fl-dash .fl-map {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* own stacking context, so the overlay panels sit above every Leaflet pane */
+  background: #10171d;
+  font: inherit;
+}
+
+/* Night map: invert the light OSM style, then pull the color out so only the pins carry hue. */
+.fl-dash .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.22);
+}
+
+.fl-dash .leaflet-bar {
+  border: 1px solid var(--line-strong);
+  box-shadow: none;
+}
+
+.fl-dash .leaflet-bar a {
+  width: 2.1em;
+  height: 2.1em;
+  line-height: 2.1em;
+  background: var(--raise);
+  color: var(--ink);
+  border-bottom-color: var(--line-strong);
+}
+
+.fl-dash .leaflet-bar a:hover {
+  background: var(--raise-2);
+}
+
+.fl-dash .leaflet-control-attribution {
+  background: rgba(14, 20, 25, 0.78);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.fl-dash .leaflet-control-attribution a {
+  color: var(--ink-2);
+}
+
+/* Pins (L.divIcon). The icon box is bigger than the dot to leave room for rings and pulses. */
+.fl-dash .fl-pin-icon {
+  background: none;
+  border: 0;
+}
+
+.fl-pin {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.fl-pin-dot {
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: var(--pin);
+  border: 2px solid #0e1419;
+  box-shadow: 0 0 0 1px rgba(237, 241, 244, 0.28), 0 0 12px var(--pin);
+  transition: transform 160ms var(--ease);
+}
+
+.fl-pin.is-pulse::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border-radius: 50%;
+  border: 2px solid var(--pin);
+  animation: fl-pin-pulse 1.6s var(--ease) infinite;
+  pointer-events: none;
+}
+
+.fl-pin.is-pending .fl-pin-dot {
+  box-shadow: 0 0 0 1px rgba(237, 241, 244, 0.28);
+  animation: fl-pin-wait 1.2s ease-in-out infinite alternate;
+}
+
+/* Dispatched: a white ring, like a unit assigned around the call. */
+.fl-pin.is-dispatched .fl-pin-dot {
+  box-shadow: 0 0 0 2px #0e1419, 0 0 0 4px var(--ink);
+  opacity: 0.85;
+}
+
+.fl-pin.is-resolved {
+  opacity: 0.35;
+  filter: grayscale(0.8);
+}
+
+.fl-pin.is-resolved .fl-pin-dot {
+  box-shadow: none;
+}
+
+.fl-pin.is-selected .fl-pin-dot {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px #0e1419, 0 0 0 5px var(--ink), 0 0 18px var(--pin);
+}
+
+.fl-pin.is-review .fl-pin-dot::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--ink);
+}
+
+@keyframes fl-pin-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@keyframes fl-pin-wait {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Hotspot labels (permanent Leaflet tooltips). */
+.fl-dash .leaflet-tooltip.fl-hotspot-label {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: rgba(14, 20, 25, 0.9);
+  color: var(--ink);
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+
+.fl-dash .leaflet-tooltip-top.fl-hotspot-label::before {
+  border-top-color: var(--line-strong);
+}
+
+.fl-hotspot-name {
+  font-weight: 700;
+}
+
+.fl-hotspot-count {
+  color: var(--muted);
+}
+
+.fl-legend {
+  position: absolute;
+  left: 0.75em;
+  bottom: 0.75em;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25em 0.9em;
+  margin: 0;
+  padding: 0.4em 0.75em;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(14, 20, 25, 0.82);
+  font-size: 0.8em;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+
+.fl-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.fl-legend li::before {
+  content: '';
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: var(--lvl);
+}
+
+.fl-legend .is-ring::before {
+  background: var(--faint);
+  box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 3px var(--ink);
+}
+
+/* ---------- Overlay panels over the map ---------- */
+
+.fl-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.fl-overlay > * {
+  pointer-events: auto;
+}
+
+.fl-qr,
+.fl-sitrep {
+  position: absolute;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: rgba(19, 27, 34, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.fl-qr {
+  top: 0.75em;
+  right: 0.75em;
+  width: 17.5em;
+  max-height: calc(100% - 1.5em);
+  overflow-y: auto;
+  padding: 0.75em 0.9em 0.9em;
+}
+
+.fl-qr-head,
+.fl-sitrep-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.fl-qr-head h2,
+.fl-sitrep-head h2 {
+  flex: 1;
+  font-size: 1em;
+  font-weight: 700;
+}
+
+.fl-qr-code {
+  margin: 0.55em 0 0.6em;
+  padding: 0;
+  border-radius: 4px;
+  background: #ffffff;
+  line-height: 0;
+}
+
+.fl-qr-code svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fl-qr-url {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.fl-qr-warn {
+  margin-top: 0.5em;
+  padding: 0.45em 0.6em;
+  border-left: 3px solid var(--fl-medium);
+  background: rgba(245, 183, 10, 0.08);
+  font-size: 0.82em;
+  color: var(--ink-2);
+}
+
+.fl-qr > .fl-link-btn {
+  margin-top: 0.4em;
+  font-size: 0.85em;
+}
+
+.fl-qr-form {
+  display: grid;
+  gap: 0.4em;
+  margin-top: 0.6em;
+  font-size: 0.88em;
+}
+
+.fl-qr-form label {
+  color: var(--muted);
+}
+
+.fl-qr-form input {
+  width: 100%;
+  padding: 0.45em 0.6em;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.fl-qr-form-row {
+  display: flex;
+  gap: 0.4em;
+}
+
+.fl-sitrep {
+  left: 0.75em;
+  bottom: 3.4em;
+  width: min(32em, calc(100% - 21em));
+  min-width: 20em;
+  max-height: calc(100% - 4.5em);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  padding: 0.75em 0.9em 0.8em;
+  overflow-y: auto;
+}
+
+.fl-sitrep-spacer {
+  flex: 1;
+}
+
+.fl-sitrep-head h2 {
+  flex: none;
+}
+
+.fl-engine {
+  padding: 0.1em 0.5em;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  font-size: 0.78em;
+  color: var(--ink-2);
+}
+
+.fl-engine.is-rules {
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.fl-sitrep-text {
+  display: grid;
+  gap: 0.5em;
+  font-size: 1.02em;
+  line-height: 1.55;
+  max-width: 68ch;
+  transition: opacity 160ms;
+}
+
+.fl-sitrep-text.is-stale {
+  opacity: 0.5;
+}
+
+.fl-hotspots {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fl-hotspots button {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  width: 100%;
+  padding: 0.4em 0.5em;
+  border: 0;
+  border-radius: 4px;
+  background: var(--raise);
+  text-align: left;
+}
+
+.fl-hotspots button:hover {
+  background: var(--raise-2);
+}
+
+.fl-hot-dot {
+  width: 0.75em;
+  height: 0.75em;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lvl);
+}
+
+.fl-hot-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.fl-hot-n,
+.fl-sitrep-time {
+  font-size: 0.82em;
+  color: var(--muted);
+}
+
+/* Toasts: top center of the map, newest first. */
+.fl-toasts {
+  position: absolute;
+  top: 0.75em;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 0.4em;
+  width: min(30em, calc(100% - 22em));
+  min-width: 18em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.fl-toast {
+  display: flex;
+  align-items: flex-start;
+  border: 1px solid var(--fl-critical);
+  border-left-width: 6px;
+  border-radius: var(--radius);
+  background: rgba(19, 27, 34, 0.97);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  animation: fl-toast-in 260ms var(--ease);
+}
+
+.fl-toast-body {
+  flex: 1;
+  display: grid;
+  gap: 0.15em;
+  padding: 0.55em 0.4em 0.6em 0.75em;
+  border: 0;
+  background: none;
+  text-align: start;
+}
+
+.fl-toast-kicker {
+  font-size: 0.8em;
+  font-weight: 800;
+  color: var(--fl-critical);
+}
+
+.fl-toast-text {
+  font-weight: 600;
+}
+
+.fl-toast .fl-icon-btn {
+  margin: 0.3em 0.3em 0 0;
+}
+
+@keyframes fl-toast-in {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}
+
+.fl-notice {
+  position: absolute;
+  bottom: 3.4em;
+  right: 0.75em;
+  max-width: 26em;
+  padding: 0.55em 0.8em;
+  border: 1px solid var(--fl-high);
+  border-radius: var(--radius);
+  background: rgba(19, 27, 34, 0.97);
+  font-size: 0.9em;
+}
+
+/* ---------- Queue ---------- */
+
+.fl-queue {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.fl-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+  padding: 0.6em 0.85em;
+  border-bottom: 1px solid var(--line);
+}
+
+.fl-queue-title {
+  font-size: 1em;
+  font-weight: 700;
+  font-stretch: 112%;
+}
+
+.fl-seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.fl-seg button {
+  padding: 0.2em 0.7em;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.fl-seg button[aria-pressed='true'] {
+  background: var(--raise-2);
+  color: var(--ink);
+}
+
+.fl-seg-n {
+  margin-left: 0.25em;
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.fl-seg button[aria-pressed='true'] .fl-seg-n {
+  color: var(--muted);
+}
+
+.fl-queue-empty {
+  padding: 1.5em 1em;
+  color: var(--muted);
+}
+
+.fl-queue-list {
+  position: relative; /* offsetTop of cards is measured against the list (FLIP) */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.5em 0.6em 1em;
+  list-style: none;
+  display: grid;
+  align-content: start;
+  gap: 0.4em;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.fl-card {
+  position: relative;
+  border-radius: var(--radius);
+  will-change: transform;
+}
+
+.fl-card-button {
+  display: flex;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raise);
+  text-align: left;
+  overflow: hidden;
+  transition: background-color 120ms, border-color 120ms;
+}
+
+.fl-card-button:hover {
+  border-color: var(--line-strong);
+  background: var(--raise-2);
+}
+
+.fl-card.is-selected .fl-card-button {
+  border-color: var(--ink);
+  background: var(--raise-2);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.fl-card.is-dispatched .fl-card-button {
+  background: var(--panel);
+}
+
+.fl-card.is-resolved .fl-card-button {
+  background: var(--panel);
+  opacity: 0.55;
+}
+
+/* The staff gauge: track is the card's edge, fill rises with the reported water depth. */
+.fl-gauge {
+  position: relative;
+  flex: none;
+  width: 7px;
+  background: color-mix(in srgb, var(--lvl) 28%, var(--bg));
+}
+
+.fl-gauge-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--lvl);
+  transition: height 500ms var(--ease);
+}
+
+.fl-card-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.3em;
+  padding: 0.55em 0.75em 0.6em;
+}
+
+.fl-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  min-width: 0;
+}
+
+.fl-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.1em 0.45em;
+  border-radius: 3px;
+  background: var(--lvl);
+  color: var(--bg);
+  font-size: 0.78em;
+  font-weight: 800;
+  font-stretch: 88%;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.fl-level-score {
+  padding-left: 0.45em;
+  border-left: 1px solid rgba(14, 20, 25, 0.35);
+  font-weight: 600;
+}
+
+.fl-level.is-pending {
+  background: transparent;
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--fl-pending);
+}
+
+.fl-lang {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-size: 0.8em;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.fl-lang-tr {
+  color: var(--faint);
+}
+
+.fl-card-time {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.fl-card-summary {
+  font-size: 1.02em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fl-card-summary.is-skeleton {
+  display: grid;
+  gap: 0.35em;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.fl-skel-bar {
+  height: 0.55em;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--line) 0%, var(--line-strong) 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: fl-shimmer 1.3s linear infinite;
+}
+
+.fl-skel-bar.is-short {
+  width: 60%;
+}
+
+@keyframes fl-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.fl-card-place {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  min-width: 0;
+  font-size: 0.86em;
+  color: var(--muted);
+}
+
+.fl-card-place-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fl-card-depth {
+  margin-left: auto;
+  flex: none;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.fl-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.fl-chip {
+  display: inline-block;
+  padding: 0.05em 0.45em;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  font-size: 0.78em;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Needs review must not blend in: a hatched amber tag. */
+.fl-chip.is-review {
+  border-color: var(--fl-medium);
+  background: repeating-linear-gradient(-45deg, rgba(245, 183, 10, 0.24) 0 5px, transparent 5px 10px);
+  color: #fbe3a0;
+  font-weight: 700;
+}
+
+.fl-status {
+  display: inline-block;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.fl-card .fl-status {
+  margin-left: auto;
+}
+
+.fl-status.is-new {
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.fl-status.is-dispatched {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.fl-status.is-resolved {
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+/* Flash on new or changed rows: a light wash that drains away. */
+.fl-card-flash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  border-radius: var(--radius);
+  pointer-events: none;
+  animation: fl-flash 1.8s var(--ease) forwards;
+}
+
+.fl-card-flash.is-new {
+  animation-name: fl-flash-new;
+}
+
+@keyframes fl-flash {
+  0% {
+    background: rgba(237, 241, 244, 0.16);
+  }
+  100% {
+    background: rgba(237, 241, 244, 0);
+  }
+}
+
+@keyframes fl-flash-new {
+  0% {
+    background: rgba(237, 241, 244, 0.32);
+    box-shadow: inset 0 0 0 2px var(--ink);
+  }
+  100% {
+    background: rgba(237, 241, 244, 0);
+    box-shadow: inset 0 0 0 2px rgba(237, 241, 244, 0);
+  }
+}
+
+/* ---------- Drawer ---------- */
+
+.fl-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-top: 4px solid var(--lvl);
+  animation: fl-drawer-in 180ms var(--ease);
+}
+
+@keyframes fl-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.fl-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+  padding: 0.55em 0.6em 0.55em 0.9em;
+  border-bottom: 1px solid var(--line);
+}
+
+.fl-drawer-id {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6em;
+}
+
+.fl-drawer-num {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.fl-drawer-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.9em 0.9em 1.5em;
+  display: grid;
+  align-content: start;
+  gap: 1em;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.fl-drawer-summary {
+  font-size: 1.35em;
+  font-weight: 700;
+  font-stretch: 94%;
+  line-height: 1.22;
+  letter-spacing: -0.005em;
+}
+
+.fl-drawer-place {
+  display: grid;
+  gap: 0.1em;
+  margin-top: -0.6em;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.fl-drawer-when {
+  font-weight: 400;
+  font-size: 0.88em;
+  color: var(--muted);
+}
+
+.fl-review {
+  padding: 0.6em 0.75em;
+  border: 1px solid var(--fl-medium);
+  border-radius: var(--radius);
+  background: repeating-linear-gradient(-45deg, rgba(245, 183, 10, 0.12) 0 8px, rgba(245, 183, 10, 0.04) 8px 16px);
+  font-size: 0.92em;
+  color: var(--ink);
+}
+
+.fl-review strong {
+  color: #fbe3a0;
+}
+
+.fl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45em;
+}
+
+.fl-actions .fl-btn {
+  min-height: 2.6em;
+  padding: 0.4em 1.1em;
+  font-size: 0.98em;
+}
+
+.fl-error {
+  padding: 0.45em 0.65em;
+  border-left: 3px solid var(--fl-critical);
+  background: rgba(229, 72, 77, 0.1);
+  font-size: 0.88em;
+  color: var(--ink);
+}
+
+.fl-sec {
+  display: grid;
+  gap: 0.45em;
+}
+
+.fl-sec h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.fl-sec-note {
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.fl-audio {
+  width: 100%;
+  height: 2.5em;
+  color-scheme: dark;
+}
+
+.fl-photo {
+  display: block;
+  width: 100%;
+  max-height: 16em;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+
+.fl-transcript {
+  padding: 0.1em 0 0.1em 0.8em;
+  border-left: 3px solid var(--line-strong);
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 70ch;
+}
+
+.fl-transcript.is-original {
+  font-size: 1.08em;
+  color: var(--ink);
+}
+
+/* Arabic needs more line height and a face with good Arabic shapes. */
+.fl-transcript.is-arabic {
+  font-family: 'Segoe UI', 'Noto Sans Arabic', 'Noto Naskh Arabic', Tahoma, sans-serif;
+  font-size: 1.18em;
+  line-height: 1.95;
+}
+
+.fl-transcript[dir='auto']:dir(rtl) {
+  padding: 0.1em 0.8em 0.1em 0;
+  border-left: 0;
+  border-right: 3px solid var(--line-strong);
+}
+
+.fl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em;
+}
+
+.fl-chips .fl-chip {
+  font-size: 0.85em;
+}
+
+.fl-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--line);
+  overflow: hidden;
+}
+
+.fl-fields > div {
+  display: grid;
+  gap: 0.1em;
+  padding: 0.45em 0.65em;
+  background: var(--raise);
+}
+
+.fl-fields > div.is-wide {
+  grid-column: 1 / -1;
+}
+
+.fl-fields dt {
+  font-size: 0.78em;
+  color: var(--muted);
+}
+
+.fl-fields dd {
+  font-weight: 600;
+}
+
+.fl-fields dd.is-alert {
+  color: var(--fl-high);
+}
+
+.fl-fields.is-meta dd {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.fl-muted {
+  color: var(--muted);
+}
+
+/* ---------- Small screens: stack map over queue ---------- */
+
+@media (max-width: 900px) {
+  .fl-dash {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .fl-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 60vh auto;
+  }
+
+  .fl-side {
+    min-height: 70vh;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .fl-tools {
+    margin-left: 0;
+  }
+
+  .fl-sitrep {
+    width: calc(100% - 1.5em);
+    min-width: 0;
+  }
+
+  .fl-toasts {
+    width: calc(100% - 1.5em);
+    min-width: 0;
+  }
+
+  .fl-qr {
+    width: 13em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-dash *,
+  .fl-dash *::before,
+  .fl-dash *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

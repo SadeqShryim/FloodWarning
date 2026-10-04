@@ -1,0 +1,61 @@
+{
+  "notes": [
+    {
+      "file": "ar_grandma_basement.mp3",
+      "voice": "ar-LB-LaylaNeural",
+      "text": "ألو، الله يخليكن ساعدونا. جدتي بالبيسمنت، والمي وصلت لركبها وعم تطلع كل شوي. هي كبيرة بالعمر وما فيها تطلع الدرج لحالها. نحنا قريبين من وارن وشيفر.",
+      "english": "Hello, please help us. My grandmother is in the basement, the water has reached her knees and keeps rising. She is elderly and cannot climb the stairs by herself. We are near Warren and Schaefer.",
+      "expected_language": "ar",
+      "expected": {
+        "location_type": "basement",
+        "water_depth_cm": 50,
+        "water_rising": true,
+        "people_at_risk.elderly": true,
+        "people_at_risk.trapped": true,
+        "location_hint_contains": [
+          "Warren",
+          "Schaefer"
+        ]
+      },
+      "expected_level": "CRITICAL"
+    },
+    {
+      "file": "en_panel_kids.mp3",
+      "voice": "en-US-JennyNeural",
+      "text": "Hi, I need help. We have about two feet of water in our basement and it's touching the electrical panel. There's a buzzing sound coming from it. My two kids are upstairs.",
+      "english": null,
+      "expected_language": "en",
+      "expected": {
+        "location_type": "basement",
+        "water_depth_cm": 61,
+        "hazards.electrical": true,
+        "people_at_risk.children": true,
+        "people_at_risk.count": 2
+      },
+      "expected_level": "CRITICAL"
+    },
+    {
+      "file": "es_street.mp3",
+      "voice": "es-MX-DaliaNeural",
+      "text": "Hola, quiero reportar que la avenida Dix cerca de Vernor está inundada. El agua llega a la mitad de las llantas de los carros. No hay nadie herido.",
+      "english": "Hello, I want to report that Dix Avenue near Vernor is flooded. The water reaches halfway up the cars' tires. Nobody is hurt.",
+      "expected_language": "es",
+      "expected": {
+        "location_type": "street",
+        "water_depth_cm": 30,
+        "people_at_risk.medical": false,
+        "location_hint_contains": [
+          "Dix",
+          "Vernor"
+        ]
+      },
+      "expected_level": "LOW"
+    }
+  ],
+  "wav": {
+    "file": "en_panel_kids.wav",
+    "voice": "Windows SAPI (System.Speech default voice), 16 kHz mono 16-bit PCM",
+    "same_as": "en_panel_kids.mp3",
+    "text": "Hi, I need help. We have about two feet of water in our basement and it's touching the electrical panel. There's a buzzing sound coming from it. My two kids are upstairs."
+  }
+}
