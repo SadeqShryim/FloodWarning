@@ -4,12 +4,16 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from pathlib import Path
 from urllib.parse import parse_qs
 
 import httpx
 import pytest
 
 from app import config, geocode
+from app.util import haversine_m
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 NOMINATIM = "https://nominatim.test"
 
@@ -147,23 +151,6 @@ def test_reverse_error_payload_is_a_cached_miss(server):
     assert len(rec.requests) == 1
 
 
-def test_intersection_goes_to_overpass(server):
-    def handler(req):
-        assert req.url.host == "overpass-api.de"
-        return httpx.Response(200, json={"elements": [{"type": "node", "id": 1, "lat": 42.34561, "lon": -83.17289}]})
-
-    rec = server(handler)
-    hit = run(geocode.geocode("warren Ave and Schaefer Rd"))
-    assert hit == {"lat": 42.34561, "lng": -83.17289, "label": "Warren Ave & Schaefer Rd"}  # title-cased
-    assert len(rec.requests) == 1
-    body = parse_qs(rec.requests[0].content.decode())["data"][0]
-    assert '"(^| )Warren( |$)"]' in body and '"(^| )Schaefer( |$)"]' in body
-    assert "(42.265,-83.305,42.365,-83.12)" in body and "node(w.a)(w.b)" in body
-    # Cached under the query.
-    assert run(geocode.geocode("warren ave and schaefer rd")) == hit
-    assert len(rec.requests) == 1
-
-
 @pytest.mark.parametrize("query", ["Warren & Schaefer", "Dix y Vernor", "وارن و شيفر", "near the corner of Dix and Vernor"])
 def test_intersection_spellings(query):
     pair = geocode.split_intersection(query)
@@ -171,44 +158,6 @@ def test_intersection_spellings(query):
         assert pair == ("وارن", "شيفر")
     else:
         assert pair is not None and all(pair)
-
-
-def test_arabic_street_names_are_mapped_to_english(server):
-    seen = []
-
-    def handler(req):
-        seen.append(parse_qs(req.content.decode())["data"][0])
-        return httpx.Response(200, json={"elements": [{"type": "node", "lat": 42.3456, "lon": -83.1729}]})
-
-    server(handler)
-    hit = run(geocode.geocode("قريب من وارن وشيفر"))
-    assert hit and hit["label"] == "Warren & Schaefer"
-    assert "Warren" in seen[0] and "Schaefer" in seen[0]
-
-
-def test_intersection_without_shared_node_falls_back_to_first_street(server):
-    def handler(req):
-        if req.url.host == "overpass-api.de":
-            return httpx.Response(200, json={"elements": []})
-        return httpx.Response(200, json=[{"lat": "42.30", "lon": "-83.15", "category": "highway", "name": "Dix Avenue",
-                                          "address": {"road": "Dix Avenue", "neighbourhood": "Southend"}}])
-
-    rec = server(handler)
-    hit = run(geocode.geocode("Dix and Vernor"))
-    assert hit == {"lat": 42.3, "lng": -83.15, "label": "Dix near Vernor"}
-    assert [r.url.host for r in rec.requests] == ["overpass-api.de", "nominatim.test"]
-    assert parse_qs(rec.requests[1].url.query.decode())["q"] == ["Dix, Dearborn, MI"]
-
-
-def test_overpass_failure_falls_back_to_nominatim(server):
-    def handler(req):
-        if req.url.host == "overpass-api.de":
-            return httpx.Response(504)
-        return httpx.Response(200, json=SCHAEFER_HIT)
-
-    server(handler)
-    hit = run(geocode.geocode("Warren and Schaefer"))
-    assert hit is not None and hit["label"] == "Warren near Schaefer"
 
 
 def test_block_of_address_is_cleaned(server):
@@ -221,3 +170,191 @@ def test_empty_query(server):
     rec = server(lambda req: httpx.Response(200, json=[]))
     assert run(geocode.geocode("  ")) is None
     assert rec.requests == []
+
+
+class OSM:
+    """Fake Nominatim + Overpass. Street lookups (dedupe=0, polygon_geojson) answer from real Nominatim
+    answers recorded live in Oct 2026 (tests/fixtures/nominatim_*.json), filtered by the request's
+    viewbox and limit like the real service. Overpass behavior per host: "timeout", "empty", "down"
+    (HTTP 504) or a node dict."""
+
+    def __init__(self, overpass=None, mirror=None, drop_near=None, single=None, hide_always=False):
+        self.overpass = {"overpass-api.de": overpass or "timeout", "overpass.kumi.systems": mirror or "timeout"}
+        self.drop_near = drop_near  # (lat, lng, meters): hide ways near this point from Dearborn-wide lookups
+        self.single = single if single is not None else []
+        self.hide_always = hide_always  # also hide them from narrowed lookups
+        self.requests: list[httpx.Request] = []
+
+    def __call__(self, req: httpx.Request) -> httpx.Response:
+        self.requests.append(req)
+        host = req.url.host
+        if host in self.overpass:
+            mode = self.overpass[host]
+            if mode == "timeout":
+                raise httpx.ReadTimeout("The read operation timed out", request=req)
+            if mode == "down":
+                return httpx.Response(504)
+            elements = [] if mode == "empty" else [{"type": "node", "id": 1, **mode}]
+            return httpx.Response(200, json={"elements": elements})
+        params = parse_qs(req.url.query.decode())
+        if params.get("polygon_geojson") != ["1"]:
+            return httpx.Response(200, json=self.single)
+        core = params["q"][0].split(",")[0].strip().lower()
+        ways = STREETS.get(core, [])
+        west, north, east, south = (float(v) for v in params["viewbox"][0].split(","))
+        narrowed = east - west < 0.1
+        out = []
+        for way in ways:
+            s, n, w, e = (float(v) for v in way["boundingbox"])
+            if e < west or w > east or n < south or s > north:
+                continue
+            if self.drop_near and (not narrowed or self.hide_always):
+                lat, lng, meters = self.drop_near
+                if haversine_m(lat, lng, (s + n) / 2, (w + e) / 2) < meters:
+                    continue
+            out.append(way)
+        return httpx.Response(200, json=out[: int(params["limit"][0])])
+
+    @property
+    def hosts(self):
+        return [r.url.host for r in self.requests]
+
+
+STREETS = {
+    name: json.loads((FIXTURES / f"nominatim_{name}.json").read_text(encoding="utf-8"))
+    for name in ("warren", "schaefer")
+}
+WARREN_SCHAEFER = (42.343985, -83.176874)  # the node West Warren Avenue and Schaefer Road share in OSM
+
+
+def test_intersection_from_nominatim_geometry_without_overpass(server):
+    # Live, Oct 2026: both Overpass servers timed out at 8 s; Nominatim answered in ~1 s.
+    osm = OSM(overpass="timeout", mirror="timeout")
+    server(osm)
+    hit = run(geocode.geocode("Warren and Schaefer"))
+    assert hit == {"lat": WARREN_SCHAEFER[0], "lng": WARREN_SCHAEFER[1], "label": "Warren Ave & Schaefer Rd"}
+    assert osm.hosts == ["nominatim.test", "nominatim.test"]  # Overpass not even needed
+    params = [parse_qs(r.url.query.decode()) for r in osm.requests]
+    assert [p["q"][0] for p in params] == ["Warren, Dearborn, MI", "Schaefer, Dearborn, MI"]
+    assert all(p["dedupe"] == ["0"] and p["bounded"] == ["1"] and p["limit"] == ["40"] for p in params)
+    # Exact: cached for good.
+    saved = json.loads(config.GEOCODE_CACHE_PATH.read_text(encoding="utf-8"))
+    assert saved["fwd:warren and schaefer"]["label"] == "Warren Ave & Schaefer Rd"
+
+
+@pytest.mark.parametrize("query", ["W Warren Ave & Schaefer Hwy", "warren avenue and schaefer road",
+                                   "Warren y Shafer", "قريب من وارن وشيفر"])
+def test_intersection_names_are_prefix_suffix_and_spelling_tolerant(server, query):
+    server(OSM())
+    hit = run(geocode.geocode(query))
+    assert hit is not None and (hit["lat"], hit["lng"]) == WARREN_SCHAEFER
+    assert "&" in hit["label"]
+
+
+def test_overpass_mirror_when_the_crossing_is_beyond_nominatims_40_ways(server):
+    osm = OSM(overpass="timeout", mirror={"lat": 42.343985, "lon": -83.176874}, drop_near=(*WARREN_SCHAEFER, 600))
+    server(osm)
+    hit = run(geocode.geocode("Warren and Schaefer"))
+    assert hit == {"lat": WARREN_SCHAEFER[0], "lng": WARREN_SCHAEFER[1], "label": "Warren & Schaefer"}
+    assert osm.hosts == ["nominatim.test", "nominatim.test", "overpass-api.de", "overpass.kumi.systems"]
+    body = parse_qs(osm.requests[3].content.decode())["data"][0]
+    assert '"(^| )Warren( |$)"]' in body and '"(^| )Schaefer( |$)"]' in body
+    assert "(42.265,-83.305,42.365,-83.12)" in body and "node(w.a)(w.b)" in body and "[timeout:3]" in body
+
+
+def test_overpass_answering_no_node_skips_the_mirror(server):
+    osm = OSM(overpass="empty", drop_near=(*WARREN_SCHAEFER, 600))
+    server(osm)
+    run(geocode.geocode("Warren and Schaefer"))
+    assert "overpass.kumi.systems" not in osm.hosts
+
+
+def test_both_overpass_down_then_nominatim_inside_the_overlap_box(server):
+    osm = OSM(overpass="down", mirror="timeout", drop_near=(*WARREN_SCHAEFER, 600))
+    server(osm)
+    hit = run(geocode.geocode("Warren and Schaefer"))
+    assert hit == {"lat": WARREN_SCHAEFER[0], "lng": WARREN_SCHAEFER[1], "label": "Warren Ave & Schaefer Rd"}
+    assert osm.hosts == ["nominatim.test", "nominatim.test", "overpass-api.de", "overpass.kumi.systems",
+                         "nominatim.test", "nominatim.test"]
+    west, north, east, south = (float(v) for v in parse_qs(osm.requests[4].url.query.decode())["viewbox"][0].split(","))
+    assert west < WARREN_SCHAEFER[1] < east and south < WARREN_SCHAEFER[0] < north
+    assert east - west < 0.03 and north - south < 0.02  # a few hundred meters, not all of Dearborn
+
+
+def test_degraded_answer_is_not_cached_for_good(server):
+    # Overpass down, and the crossing ways missing even in the narrow box: "near" from the closest approach.
+    osm = OSM(overpass="down", mirror="down", drop_near=(*WARREN_SCHAEFER, 600), hide_always=True)
+    server(osm)
+    hit = run(geocode.geocode("Warren and Schaefer"))
+    assert hit is not None and hit["label"] == "Warren Ave near Schaefer Rd"
+    assert haversine_m(hit["lat"], hit["lng"], *WARREN_SCHAEFER) < 900
+    # Remembered in memory for a while (no new requests)...
+    count = len(osm.requests)
+    assert run(geocode.geocode("Warren and Schaefer")) == hit
+    assert len(osm.requests) == count
+    # ...but not written to the cache file, so a restart (or SOFT_CACHE_S later) tries again.
+    path = config.GEOCODE_CACHE_PATH
+    saved = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    assert "fwd:warren and schaefer" not in saved
+
+
+def test_intersection_without_geometry_falls_back_to_first_street(server):
+    single = [{"lat": "42.30", "lon": "-83.15", "category": "highway", "name": "Dix Avenue",
+               "address": {"road": "Dix Avenue", "neighbourhood": "Southend"}}]
+    osm = OSM(overpass="empty", single=single)  # no fixture for Dix/Vernor: Nominatim finds no ways
+    server(osm)
+    hit = run(geocode.geocode("Dix and Vernor"))
+    assert hit == {"lat": 42.3, "lng": -83.15, "label": "Dix near Vernor"}
+    assert osm.hosts == ["nominatim.test", "overpass-api.de", "nominatim.test"]
+    assert parse_qs(osm.requests[-1].url.query.decode())["q"] == ["Dix, Dearborn, MI"]
+
+
+def test_nominatim_is_spaced_but_overpass_is_not(server, monkeypatch):
+    monkeypatch.setattr(geocode, "MIN_INTERVAL_S", 0.2)
+    osm = OSM(overpass="down", mirror="down", drop_near=(*WARREN_SCHAEFER, 600))
+    times = []
+    original = osm.__call__
+
+    def timed(req):
+        times.append((req.url.host, time.monotonic()))
+        return original(req)
+
+    server(timed)
+    run(geocode.geocode("Warren and Schaefer"))
+    nominatim = [t for h, t in times if h == "nominatim.test"]
+    assert len(nominatim) == 4
+    assert all(b - a >= 0.19 for a, b in zip(nominatim, nominatim[1:]))
+
+
+def test_whole_lookup_has_a_time_budget(server, monkeypatch):
+    monkeypatch.setattr(geocode, "FORWARD_BUDGET_S", 0.3)
+
+    async def slow_forward(q):
+        await asyncio.sleep(5)
+
+    monkeypatch.setattr(geocode, "_forward", slow_forward)
+    server(lambda req: httpx.Response(200, json=[]))
+    started = time.monotonic()
+    assert run(geocode.geocode("Warren and Schaefer")) is None
+    assert time.monotonic() - started < 1.0
+    assert not config.GEOCODE_CACHE_PATH.exists()  # a timeout is not a miss
+
+
+def test_closest_approach_math():
+    # Two crossing lines: an X centered on (42.30, -83.20).
+    a = [[(-83.201, 42.30), (-83.199, 42.30)]]
+    b = [[(-83.20, 42.299), (-83.20, 42.301)]]
+    gap, meet, _ = geocode.closest_approach(a, b)
+    assert gap == pytest.approx(0, abs=0.01) and meet == pytest.approx((42.30, -83.20), abs=1e-6)
+    # Parallel streets ~111 m apart.
+    c = [[(-83.201, 42.301), (-83.199, 42.301)]]
+    gap, _, on_a = geocode.closest_approach(a, c)
+    assert gap == pytest.approx(111, abs=1.5) and on_a[0] == pytest.approx(42.30)
+    assert geocode.closest_approach(a, []) is None and geocode.closest_approach([[]], b) is None
+
+
+def test_canonical_street_spelling():
+    assert geocode._canonical_street("Shafer Rd") == "Schaefer Rd"
+    assert geocode._canonical_street("Waren") == "Warren"
+    assert geocode._canonical_street("Main St") == "Main St"  # unknown streets are left alone
+    assert geocode._canonical_street("Dix") == "Dix"

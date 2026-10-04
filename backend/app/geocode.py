@@ -44,7 +44,7 @@ NOMINATIM_TIMEOUT_S = 5.0
 OVERPASS_TIMEOUT_S = 3.5
 FORWARD_BUDGET_S = 14.0  # a whole forward lookup, all fallbacks included
 MEET_M = 40.0  # streets closer than this meet: an intersection ("A & B")
-NEAR_M = 400.0  # closer than this: "A near B" at the closest point of A
+NEAR_M = 2000.0  # closer than this: "A near B" at the point of A closest to B
 SOFT_CACHE_S = 600.0  # degraded answers given while a service was failing: remembered this long, in memory only
 
 # Tests swap this for an httpx.MockTransport so no request ever leaves the machine.
@@ -456,6 +456,17 @@ def _overlap_box(e1, e2, pad_m: float = 250.0) -> tuple[float, float, float, flo
     return west, south, east, north
 
 
+def _approach_box(approach) -> tuple[float, float, float, float] | None:
+    """Square around the gap between two street pieces that do not meet yet: where the missing ways are."""
+    if approach is None or approach[0] > 3000:
+        return None
+    gap, (lat, lng), _ = approach
+    half = max(300.0, gap)
+    dlat = half / _M_PER_DEG_LAT
+    dlng = half / (_M_PER_DEG_LAT * math.cos(math.radians(lat)))
+    return lng - dlng, lat - dlat, lng + dlng, lat + dlat
+
+
 def _street_label(street: str, ways: list[dict]) -> str:
     """The reporter's street name, completed with the OSM suffix when they left it out ("Warren" -> "Warren Ave")."""
     label = _title(street)
@@ -486,11 +497,12 @@ async def _intersection(a: str, b: str) -> tuple[dict | None, bool]:
     ways_a: list[dict] = []
     ways_b: list[dict] = []
 
-    def best(extra_a: list[dict], extra_b: list[dict]) -> dict | None:
+    def best(extra_a: list[dict], extra_b: list[dict]) -> tuple[dict | None, Any]:
         approach = closest_approach(_geometry(ways_a + extra_a), _geometry(ways_b + extra_b))
         if approach is None:
-            return None
-        return _hit_from_approach(approach, _street_label(a, ways_a + extra_a), _street_label(b, ways_b + extra_b))
+            return None, None
+        labels = _street_label(a, ways_a + extra_a), _street_label(b, ways_b + extra_b)
+        return _hit_from_approach(approach, *labels), approach
 
     # 1. Both streets' ways from Nominatim, closest approach.
     try:
@@ -499,7 +511,7 @@ async def _intersection(a: str, b: str) -> tuple[dict | None, bool]:
     except _Transient as exc:
         log.info("nominatim street lookup failed for %r / %r (%s)", a, b, exc)
         failed = True
-    near = best([], [])
+    near, approach = best([], [])
     if near and " & " in near["label"]:
         return near, False
 
@@ -515,12 +527,12 @@ async def _intersection(a: str, b: str) -> tuple[dict | None, bool]:
             failed = True
 
     # 3. Nominatim again, only where the two streets' extents overlap.
-    box = _overlap_box(_extent(ways_a), _extent(ways_b))
+    box = _overlap_box(_extent(ways_a), _extent(ways_b)) or _approach_box(approach)
     if box is not None:
         try:
             more_a = await _street_ways(a, box)
             more_b = await _street_ways(b, box)
-            hit = best(more_a, more_b)
+            hit, _ = best(more_a, more_b)
             if hit:
                 near = hit  # more ways can only bring the streets closer
             if hit and " & " in hit["label"]:

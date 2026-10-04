@@ -64,7 +64,7 @@ If cloudflared stops during the demo (a network change, a crash), `run.py` opens
 | `--open` | Open the dashboard in your default browser |
 | `--no-tunnel` | Local only: no public https link (phones can only use typed reports on the same Wi-Fi) |
 | `--port 8000` | Local port (default 8000) |
-| `--reset` | Delete the data folder first: fresh database with the 25 demo reports |
+| `--reset` | Delete the data folder first: fresh database with the 25 demo reports (refused, touching nothing, while another running FloodLine uses that folder) |
 | `--build` | Rebuild the frontend even if `frontend/dist` exists (it is built automatically the first time) |
 | `--skip-build` | Never build the frontend (API only, if there is no build yet) |
 

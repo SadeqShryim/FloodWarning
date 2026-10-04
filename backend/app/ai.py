@@ -452,6 +452,18 @@ def schedule_warm_up() -> asyncio.Task | None:
     return _warmup_task
 
 
+async def stop_warm_up() -> None:
+    """Cancel a warm-up still running at shutdown (avoids "Task was destroyed but it is pending")."""
+    task = _warmup_task
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):  # noqa: BLE001 - shutting down anyway
+        pass
+
+
 # --- the prompt ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """\

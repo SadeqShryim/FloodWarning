@@ -119,6 +119,7 @@ async def _cancel_tasks(tasks: list[asyncio.Task]) -> None:
 
 async def cancel_enrichments() -> None:
     await _cancel_tasks(list(_enrichments.values()))
+    await service.cancel_late_labels()
 
 
 # ---------------------------------------------------------------- shutdown
@@ -257,6 +258,7 @@ async def lifespan(app: FastAPI):
         except Exception:
             log.exception("stopping storm mode failed")
         await _cancel_tasks(list(_background))
+        await service.cancel_late_labels()
         db.close()
 
 

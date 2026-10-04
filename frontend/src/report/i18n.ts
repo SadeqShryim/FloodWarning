@@ -399,7 +399,7 @@ const es: Strings = {
   sending: 'Enviando su reporte…',
   sendingLead: 'No cierre esta página.',
   sendingProgress: (pct) => `${pct}% enviado`,
-  sendingAlmost: 'Ya casi termina…',
+  sendingAlmost: 'Ya casi terminamos…',
   sendingSlow: 'La conexión está lenta. Seguimos enviando…',
   stopSending: 'Dejar de enviar',
 

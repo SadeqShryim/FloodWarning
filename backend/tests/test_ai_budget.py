@@ -211,6 +211,7 @@ def test_schedule_warm_up_runs_at_most_once_and_never_blocks(fake, monkeypatch):
         return first, second, returned_in
 
     first, second, returned_in = asyncio.run(startup())
+    assert first.cancelled()
     assert first is not None and second is None
     assert returned_in < 0.05
     assert len(models.calls) <= 1
@@ -229,3 +230,18 @@ def test_schedule_warm_up_is_off_under_pytest_and_when_disabled(fake, monkeypatc
     monkeypatch.setenv("FLOODLINE_AI_WARMUP", "0")
     assert asyncio.run(_schedule_later()) is None
     assert models.calls == []
+
+
+def test_stop_warm_up_cancels_a_running_warm_up(fake, monkeypatch):
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    fake({"gemini-2.5-flash": ["hang"]})
+
+    async def lifespan():
+        task = ai.schedule_warm_up()
+        await asyncio.sleep(0.05)  # the request is in flight
+        await ai.stop_warm_up()
+        return task
+
+    task = asyncio.run(lifespan())
+    assert task.cancelled()
+    asyncio.run(ai.stop_warm_up())  # nothing running: no-op

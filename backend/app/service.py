@@ -92,6 +92,10 @@ MIME_TO_EXT = {
 
 _PENDING_URGENCY = {"urgency_score": None, "urgency_level": None, "urgency_reasons": []}
 
+LABEL_GRACE_S = 1.0  # how long a finished AI result waits for a GPS report's street name
+LATE_LABEL_MAX_S = 30.0  # after that, a late street name is still stored if it comes within this
+_label_tasks: set[asyncio.Task] = set()  # late street-name updates still running (strong refs)
+
 
 def mime_for_path(path: str | Path) -> str:
     suffix = Path(path).suffix.lower()
@@ -333,7 +337,8 @@ async def _enrich(report_id: int, started: float) -> dict:
         location_task.cancel()
         raise
     late_label = not location_task.done()
-    location_fields = {} if late_label or location_task.cancelled() else location_task.result()
+    usable = location_task.done() and not location_task.cancelled() and location_task.exception() is None
+    location_fields = location_task.result() if usable else {}
     fields: dict[str, Any] = dict(location_fields)
 
     error: BaseException | None = ai_result if isinstance(ai_result, BaseException) else None
@@ -380,7 +385,48 @@ async def _enrich(report_id: int, started: float) -> dict:
         total_ms,
         (final or {}).get("location_source"),
     )
+    if late_label and final:
+        # Finish the street name on its own, so this task (which the phone's POST and "Retry AI"
+        # look at) is done as soon as the AI result is stored.
+        late = asyncio.ensure_future(_apply_late_label(report_id, location_task))
+        _label_tasks.add(late)
+        late.add_done_callback(_label_tasks.discard)
+    elif late_label:
+        location_task.cancel()
     return final or {}
+
+
+async def _apply_late_label(report_id: int, location_task: asyncio.Future) -> dict | None:
+    """Store a street name that arrived after the AI result, unless the report has one by now."""
+    try:
+        label_fields = await asyncio.wait_for(location_task, timeout=LATE_LABEL_MAX_S)
+    except asyncio.TimeoutError:
+        log.info("report %s: gave up waiting for its street name", report_id)
+        return None
+    except asyncio.CancelledError:
+        location_task.cancel()
+        raise
+    except Exception:
+        log.exception("street-name lookup failed for report %s", report_id)
+        return None
+    current = db.get_report(report_id)
+    if not label_fields or current is None or current.get("address_text"):
+        return None
+    try:
+        return await apply_update(report_id, label_fields)
+    except Exception:
+        log.exception("storing the street name for report %s failed", report_id)
+        return None
+
+
+async def cancel_late_labels() -> None:
+    """Stop pending street-name lookups (demo reset, shutdown): their reports are going away."""
+    loop = asyncio.get_running_loop()
+    mine = [t for t in _label_tasks if not t.done() and t.get_loop() is loop]
+    for task in mine:
+        task.cancel()
+    if mine:
+        await asyncio.gather(*mine, return_exceptions=True)
 
 
 def _fallback_fields(text: str | None, ui_language: str, row: Mapping[str, Any]) -> dict:

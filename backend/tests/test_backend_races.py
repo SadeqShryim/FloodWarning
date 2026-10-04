@@ -401,3 +401,60 @@ def test_twenty_concurrent_posts_while_storm_runs(app_env: Any, monkeypatch: pyt
     reports = asyncio.run(scenario())
     assert len([r for r in reports if not r["is_simulated"]]) == 20
     assert [r["id"] for r in reports if r["ai_status"] == "pending"] == []
+
+
+# ---------------------------------------------------------------- slow street-name lookups
+
+
+def test_slow_street_name_lookup_does_not_hold_back_the_ranked_pin(app_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nominatim allows 1 request/s and can hang up to its 5 s timeout. A GPS report's AI result
+    must not wait for the street name: the phone answers and the pin ranks right away, and the
+    label lands in a later update."""
+    from app import geocode
+
+    slow_ai(monkeypatch, 0.2)
+    monkeypatch.setattr(service, "LABEL_GRACE_S", 0.2)
+    lock = asyncio.Lock()
+
+    async def slow_reverse(lat: float, lng: float) -> str:
+        async with lock:  # like geocode.py: one request at a time
+            await asyncio.sleep(1.0)
+        return "Schaefer Rd, East Dearborn"
+
+    monkeypatch.setattr(geocode, "reverse_geocode", slow_reverse)
+
+    async def scenario() -> tuple[list[float], list[dict], list[dict]]:
+        async with running_app() as client:
+            loop = asyncio.get_running_loop()
+
+            async def post(i: int) -> tuple[float, dict]:
+                started = loop.time()
+                response = await client.post("/api/reports", files={"audio": ("v.wav", WAV, "audio/wav")},
+                                             data={"lat": "42.3401", "lng": str(-83.17 - i / 100)})
+                return loop.time() - started, response.json()
+
+            results = await asyncio.gather(*[post(i) for i in range(4)])
+            await asyncio.sleep(4.5)  # the four labels trickle in, one a second
+            final = [(await client.get(f"/api/reports/{r['id']}")).json() for _, r in results]
+            return [t for t, _ in results], [r for _, r in results], final
+
+    times, answered, final = asyncio.run(scenario())
+    assert max(times) < 1.5, times  # without the grace limit the 4th phone waited ~4 s
+    assert all(r["ai_status"] == "done" and r["urgency_level"] == "CRITICAL" for r in answered)
+    assert all(r["address_text"] == "Schaefer Rd, East Dearborn" for r in final)
+
+
+def test_quick_street_name_is_part_of_the_first_answer(app_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app import geocode
+
+    async def quick_reverse(lat: float, lng: float) -> str:
+        await asyncio.sleep(0.05)
+        return "Warren Ave, East Dearborn"
+
+    monkeypatch.setattr(geocode, "reverse_geocode", quick_reverse)
+
+    async def scenario() -> dict:
+        async with running_app() as client:
+            return (await client.post("/api/reports", data={"text": "water", "lat": "42.34", "lng": "-83.17"})).json()
+
+    assert asyncio.run(scenario())["address_text"] == "Warren Ave, East Dearborn"

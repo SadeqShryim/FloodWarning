@@ -271,7 +271,18 @@ def reset_data(path: Path) -> None:
     if not (inside_repo or (path / "floodline.db").exists()):
         say(f"[run] ERROR: --reset refused: {path} does not look like a FloodLine data folder.")
         sys.exit(1)
-    shutil.rmtree(path)
+    # If another FloodLine is running on this folder (say the demo on :8000 while a teammate starts
+    # a second copy with --reset), deleting file by file would wipe its voice notes and photos and
+    # then fail on the open database. Renaming the folder first is all-or-nothing: Windows refuses
+    # to rename a folder with an open file in it, and then we touch nothing.
+    doomed = path.with_name(f"{path.name}.reset-{os.getpid()}")
+    try:
+        path.rename(doomed)
+    except OSError:
+        say(f"[run] ERROR: --reset refused: {path} is in use, probably by a FloodLine that is still "
+            "running. Stop it first, or press Reset demo on its dashboard instead.")
+        sys.exit(1)
+    shutil.rmtree(doomed, ignore_errors=True)
     say(f"[run] Deleted {path} (fresh database and demo reports on start).")
 
 

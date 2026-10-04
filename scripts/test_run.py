@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -172,6 +173,37 @@ def test_polling_requests_are_kept_out_of_the_console():
     ]
     for line in shown:
         assert not run.is_routine_request(line), line
+
+
+def make_data_folder(root: Path) -> Path:
+    data = root / "data"
+    (data / "uploads").mkdir(parents=True)
+    (data / "uploads" / "voice.wav").write_bytes(b"RIFF....WAVE")
+    sqlite3.connect(data / "floodline.db").close()
+    return data
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows locks open files; that is what is tested")
+def test_reset_refuses_a_folder_in_use_and_deletes_nothing(tmp_path):
+    # Reproduced for real: `run.py --reset` on the folder of a running server wiped its uploads,
+    # then crashed with PermissionError on floodline.db.
+    data = make_data_folder(tmp_path)
+    db = sqlite3.connect(data / "floodline.db")  # a running server holds it open
+    try:
+        db.execute("create table t (x)")
+        with pytest.raises(SystemExit):
+            run.reset_data(data)
+        assert (data / "uploads" / "voice.wav").exists()
+        assert (data / "floodline.db").exists()
+    finally:
+        db.close()
+
+
+def test_reset_deletes_an_idle_folder(tmp_path):
+    data = make_data_folder(tmp_path)
+    run.reset_data(data)
+    assert not data.exists()
+    assert list(tmp_path.iterdir()) == []  # no leftover renamed folder
 
 
 def test_retry_pause_grows_and_is_capped(no_network, monkeypatch):
