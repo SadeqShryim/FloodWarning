@@ -6,8 +6,11 @@ import { compareReports } from '../types'
 
 export type ChangeKind = 'new' | 'changed'
 
-/** What the header shows. 'offline' = polling, but no poll has reached the server for a while. */
-export type ConnectionStatus = LiveStatus | 'offline'
+/**
+ * What the header shows. 'offline' = polling, but no poll has reached the server for a while.
+ * 'connecting' is the first attempt; 'reconnecting' is a stream that worked once and dropped.
+ */
+export type ConnectionStatus = LiveStatus | 'offline' | 'reconnecting'
 
 /** A recent change to one report. `stamp` is unique per change so the flash animation can restart. */
 export interface Flash {
@@ -69,7 +72,13 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
   const [flashes, setFlashes] = useState<Map<number, Flash>>(() => new Map())
   const [subscription, setSubscription] = useState(0) // bump to re-open the event stream
   const [offline, setOffline] = useState(false)
+  const [connectedOnce, setConnectedOnce] = useState(false) // live or polling at least once
   const lastSnapshotAt = useRef(0)
+
+  const onStatus = useCallback((next: LiveStatus) => {
+    setStatus(next)
+    if (next !== 'connecting') setConnectedOnce(true)
+  }, [])
 
   // The ref is the source of truth for diffing; state mirrors it for rendering. Doing the diff
   // outside setState keeps side effects (toasts) from running twice under StrictMode.
@@ -198,9 +207,9 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
           break
       }
     }
-    const unsubscribe = subscribeEvents(handle, setStatus)
+    const unsubscribe = subscribeEvents(handle, onStatus)
     return unsubscribe
-  }, [applySnapshot, expectReload, upsert, subscription])
+  }, [applySnapshot, expectReload, upsert, onStatus, subscription])
 
   useEffect(() => {
     const timers = flashTimers.current
@@ -233,10 +242,14 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
 
   const sorted = useMemo(() => Array.from(reports.values()).sort(compareReports), [reports])
 
+  let shown: ConnectionStatus = status
+  if (status === 'polling' && offline) shown = 'offline'
+  else if (status === 'connecting' && connectedOnce) shown = 'reconnecting'
+
   return {
     reports,
     sorted,
-    status: status === 'polling' && offline ? 'offline' : status,
+    status: shown,
     storm,
     config,
     epoch,

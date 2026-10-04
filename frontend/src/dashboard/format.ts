@@ -23,9 +23,15 @@ export function languageLabel(code: string | null | undefined): string {
   return LANGUAGE_NAMES[key] ?? key.toUpperCase()
 }
 
-/** What the reporter spoke. While the AI is still working, the phone's UI language is the best guess. */
-export function reportLanguage(report: Report): string {
-  return (report.language || report.ui_language || 'en').toLowerCase()
+/**
+ * What the reporter spoke. While the AI is still working, the phone's UI language is the best guess.
+ * Null once it finished without saying (a voice note it could not process): the phone's language
+ * says nothing about the language of the recording.
+ */
+export function reportLanguage(report: Report): string | null {
+  if (report.language) return report.language.toLowerCase()
+  if (report.ai_status === 'pending') return (report.ui_language || 'en').toLowerCase()
+  return null
 }
 
 /** "just now", "4 min ago", "2 h ago", or a date for anything older than a day. */

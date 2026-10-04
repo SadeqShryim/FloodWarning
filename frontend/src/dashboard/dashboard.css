@@ -262,7 +262,8 @@
   background: var(--fl-medium);
 }
 
-.fl-live.is-connecting .fl-live-dot {
+.fl-live.is-connecting .fl-live-dot,
+.fl-live.is-reconnecting .fl-live-dot {
   animation: fl-blink 1s steps(2) infinite;
 }
 

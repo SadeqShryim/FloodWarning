@@ -14,7 +14,8 @@ export interface Counts {
 const STATUS_TEXT: Record<ConnectionStatus, string> = {
   live: 'Live',
   polling: 'Polling every 3 s',
-  connecting: 'Reconnecting...',
+  connecting: 'Connecting...',
+  reconnecting: 'Reconnecting...',
   offline: 'Server unreachable, retrying',
 }
 

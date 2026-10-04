@@ -483,6 +483,62 @@ def test_public_url_initial_value_comes_from_config(app_env: Any, monkeypatch: p
         assert client.get("/api/config").json()["report_url"] == "http://192.168.1.20:8000/report"
 
 
+def test_gemini_warm_up_runs_at_startup_and_announces_the_model_that_answered(
+    app_env: Any, monkeypatch: pytest.MonkeyPatch, published: list[dict]
+) -> None:
+    """The warm-up starts in the background with the app and is stopped with it. When it finds that
+    the first model is closed to this key, dashboards get the model that actually answers."""
+    current = {"model": "gemini-2.5-flash"}
+    calls: list[str] = []
+
+    async def warm() -> str:
+        current["model"] = "gemini-flash-latest"
+        return current["model"]
+
+    def schedule() -> asyncio.Task:
+        calls.append("schedule")
+        return asyncio.get_running_loop().create_task(warm())
+
+    async def stop() -> None:
+        calls.append("stop")
+
+    enable_ai(monkeypatch, _never_called)
+    monkeypatch.setattr(ai, "active_model", lambda: current["model"])
+    monkeypatch.setattr(ai, "schedule_warm_up", schedule)
+    monkeypatch.setattr(ai, "stop_warm_up", stop)
+    with TestClient(main.app) as client:
+        deadline = time.monotonic() + 5
+        while not any(e["type"] == "config.updated" for e in published) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert calls == ["schedule"]
+        assert client.get("/api/config").json()["ai_model"] == "gemini-flash-latest"
+    assert calls == ["schedule", "stop"]
+    configs = [e["config"] for e in published if e["type"] == "config.updated"]
+    assert [c["ai_model"] for c in configs] == ["gemini-flash-latest"]
+
+
+def test_a_fallback_model_taking_over_is_announced_once(
+    app_env: Any, monkeypatch: pytest.MonkeyPatch, published: list[dict]
+) -> None:
+    current = {"model": "gemini-2.5-flash"}
+
+    async def extract(**kwargs: Any) -> tuple[Any, str, int]:
+        current["model"] = "gemini-flash-latest"  # 2.5 Flash answered 429; the fallback took the report
+        return make_extraction(), "gemini-flash-latest", 700
+
+    enable_ai(monkeypatch, extract)
+    monkeypatch.setattr(ai, "active_model", lambda: current["model"])
+    with TestClient(main.app) as client:
+        for _ in range(2):
+            assert post_voice(client).json()["ai_status"] == "done"
+    configs = [e["config"] for e in published if e["type"] == "config.updated"]
+    assert [c["ai_model"] for c in configs] == ["gemini-flash-latest"]
+
+
+async def _never_called(**kwargs: Any) -> Any:
+    raise AssertionError("no report is posted in this test")
+
+
 # ---------------------------------------------------------------- storm
 
 

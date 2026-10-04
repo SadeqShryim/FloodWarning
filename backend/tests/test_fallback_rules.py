@@ -53,7 +53,7 @@ def test_spanish_negation_nobody_hurt():
     ex = extract_from_text("La calle está inundada, no hay nadie herido.")
     assert ex.language == "es"
     assert ex.people_at_risk.medical is False
-    assert ex.confirmation_message.startswith("Recibimos tu reporte")
+    assert ex.confirmation_message.startswith("Recibimos su reporte")
 
 
 @pytest.mark.parametrize("text, field", [

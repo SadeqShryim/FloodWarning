@@ -17,9 +17,12 @@ export default function QrPanel({ config, onConfig, onClose }: QrPanelProps) {
   const [error, setError] = useState<string | null>(null)
 
   // Without a public (tunnel) URL, phones on another network cannot reach the laptop, and
-  // browsers only allow the microphone over https. Show the local address but say so.
+  // browsers only allow the microphone over https. Show the local address but say so: once the
+  // config has loaded (before that the tunnel URL is simply not known yet), and only on a plain-http
+  // page (a dashboard opened through the tunnel already shows a phone-ready address).
   const reportUrl = config?.report_url ?? `${window.location.origin}/report`
-  const isLocal = !config?.report_url
+  const isLocal = !config?.report_url && window.location.protocol !== 'https:'
+  const warn = isLocal && config !== null
 
   const startEdit = () => {
     setDraft(config?.public_url ?? '')
@@ -60,7 +63,7 @@ export default function QrPanel({ config, onConfig, onClose }: QrPanelProps) {
         <QRCodeSVG value={reportUrl} size={232} level="M" marginSize={2} bgColor="#ffffff" fgColor="#0e1419" title={reportUrl} />
       </div>
       <p className="fl-qr-url">{reportUrl}</p>
-      {isLocal && (
+      {warn && (
         <p className="fl-qr-warn">
           This is the laptop's local address. Phones need the https tunnel URL for voice: paste it below.
         </p>

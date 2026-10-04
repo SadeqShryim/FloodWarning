@@ -216,35 +216,37 @@ _STREETS: list[tuple[str, list[str]]] = [
     ("Middlepointe", []), ("Reuter", []), ("Orchard", []), ("Mason", []), ("Steadman", []),
 ]
 
+# Same register as the phone page: Modern Standard Arabic (reporters speak many dialects) and
+# formal Spanish (usted), with the 911 line worded like the page's own reminder.
 _RECEIVED_VOICE = {
     "en": "We received your voice note. A responder will listen to it. If life is in danger, call 911.",
-    "ar": "وصلتنا رسالتك الصوتية. سيستمع إليها أحد المستجيبين. إذا كانت هناك حياة في خطر، اتصل بـ 911.",
-    "es": "Recibimos tu nota de voz. Un rescatista la va a escuchar. Si hay una vida en peligro, llama al 911.",
+    "ar": "وصلتنا رسالتك الصوتية. سيستمع إليها أحد المستجيبين. إذا كانت حياة أحد في خطر، اتصل بـ 911.",
+    "es": "Recibimos su nota de voz. Un rescatista la va a escuchar. Si una vida está en peligro, llame al 911.",
 }
 
 # Pieces of the localized confirmation: (en, ar, es).
 _FACT_TEXT = {
-    "trapped": ("someone cannot get out", "في شخص ما بيقدر يطلع", "alguien no puede salir"),
-    "elderly": ("an elderly person", "شخص كبير بالعمر", "una persona mayor"),
+    "trapped": ("someone cannot get out", "شخص لا يستطيع الخروج", "alguien no puede salir"),
+    "elderly": ("an elderly person", "شخص مسنّ", "una persona mayor"),
     "children": ("children", "أطفال", "niños"),
-    "disabled": ("a person with a disability", "شخص من ذوي الاحتياجات", "una persona con discapacidad"),
+    "disabled": ("a person with a disability", "شخص من ذوي الإعاقة", "una persona con discapacidad"),
     "medical": ("a medical need", "حاجة طبية", "una necesidad médica"),
-    "electrical": ("water near electricity", "مي قريبة من الكهربا", "agua cerca de la electricidad"),
-    "sewage": ("sewage", "مجاري", "aguas negras"),
-    "gas": ("a gas smell", "ريحة غاز", "olor a gas"),
-    "structural": ("structural damage", "ضرر بالبناء", "daño en la estructura"),
-    "rising": ("water rising", "المي عم تطلع", "el agua sube"),
-    "basement": ("in the basement", "بالقبو", "en el sótano"),
-    "car": ("in a car", "بالسيارة", "en un carro"),
-    "street": ("street flooding", "فيضان بالشارع", "calle inundada"),
-    "home": ("inside the home", "جوا البيت", "dentro de la casa"),
+    "electrical": ("water near electricity", "ماء قريب من الكهرباء", "agua cerca de la electricidad"),
+    "sewage": ("sewage", "مياه الصرف الصحي", "aguas negras"),
+    "gas": ("a gas smell", "رائحة غاز", "olor a gas"),
+    "structural": ("structural damage", "ضرر في المبنى", "daño en la estructura"),
+    "rising": ("water rising", "الماء يرتفع", "el agua está subiendo"),
+    "basement": ("in the basement", "في القبو", "en el sótano"),
+    "car": ("in a car", "في السيارة", "en un carro"),
+    "street": ("street flooding", "فيضان في الشارع", "calle inundada"),
+    "home": ("inside the home", "داخل المنزل", "dentro de la casa"),
 }
 _CONFIRM = {
     "en": ("We received your report", "A responder will review it. If life is in danger, call 911."),
-    "ar": ("وصلنا بلاغك", "سيراجعه أحد المستجيبين. إذا كانت هناك حياة في خطر، اتصل بـ 911."),
-    "es": ("Recibimos tu reporte", "Un rescatista lo revisará. Si hay una vida en peligro, llama al 911."),
+    "ar": ("وصلنا بلاغك", "سيراجعه أحد المستجيبين. إذا كانت حياة أحد في خطر، اتصل بـ 911."),
+    "es": ("Recibimos su reporte", "Un rescatista lo revisará. Si una vida está en peligro, llame al 911."),
 }
-_WATER_DEPTH_TEXT = {"en": "about {} cm of water", "ar": "حوالي {} سم مي", "es": "unos {} cm de agua"}
+_WATER_DEPTH_TEXT = {"en": "about {} cm of water", "ar": "حوالي {} سم من الماء", "es": "unos {} cm de agua"}
 
 _compiled: dict[tuple[str, str], list[re.Pattern[str]]] = {}
 

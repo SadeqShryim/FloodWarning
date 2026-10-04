@@ -79,9 +79,10 @@ def _no_real_gemini_key(request: pytest.FixtureRequest, monkeypatch: pytest.Monk
     if request.node.get_closest_marker("real_gemini_key"):
         return
     monkeypatch.setattr(config, "GEMINI_API_KEY", None)
-    # ai.py's private memory (cached client, model choice); whichever of these it currently has.
-    fresh: dict[str, Any] = {"_client": None, "_client_key": None, "_last_model": None,
-                             "_unavailable": set(), "_no_thinking": set()}
+    # ai.py's private memory (cached client, which models answered or failed, thinking settings
+    # learned), so nothing one test taught it leaks into the next.
+    fresh: dict[str, Any] = {"_client": None, "_client_key": None, "_last_model": None, "_state_key": None,
+                             "_unavailable": set(), "_cooldown": {}, "_thinking_step": {}}
     for name, value in fresh.items():
         if hasattr(ai, name):
             monkeypatch.setattr(ai, name, value)

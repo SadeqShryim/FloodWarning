@@ -106,10 +106,17 @@ export function subscribeEvents(
     if (!closed) onStatus?.(status)
   }
 
+  // Refreshes can overlap (the first load and the reload on 'hello', a poll and a 'reset'). An
+  // answer that lands after a newer one is dropped, so the list never steps back in time.
+  let refreshSeq = 0
+  let appliedSeq = 0
+
   const refresh = async () => {
+    const seq = ++refreshSeq
     try {
       const [reports, config] = await Promise.all([api.listReports(), api.getConfig()])
-      if (closed) return
+      if (closed || seq < appliedSeq) return
+      appliedSeq = seq
       onEvent({ type: 'snapshot', reports })
       onEvent({ type: 'config.updated', config })
       onEvent({ type: 'storm.state', running: config.storm_running, injected: config.storm_injected })
@@ -196,6 +203,9 @@ export function subscribeEvents(
   }
 
   connect()
+  // Load the data now instead of waiting for the stream's 'hello': through a tunnel that buffers the
+  // stream, 'hello' never comes, and the page would sit empty until polling starts (~6 s).
+  void refresh()
 
   return () => {
     closed = true

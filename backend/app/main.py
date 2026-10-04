@@ -105,7 +105,26 @@ def start_enrichment(report_id: int) -> asyncio.Task:
             del _enrichments[report_id]
 
     task.add_done_callback(forget)
+    task.add_done_callback(_announce_model_change)
     return task
+
+
+# The ai_model the dashboards were last told about (their header badge shows it).
+_announced_model: str | None = None
+
+
+def _announce_model_change(_task: asyncio.Future | None = None) -> None:
+    """Push the config when the Gemini model that answers changes: the warm-up found the first model
+    closed to this key, or a quota error moved reports to a fallback. A live dashboard never re-reads
+    /api/config on its own, so without this its badge would keep naming a model that is not in use."""
+    global _announced_model
+    enabled, model = _ai_status()
+    # Only a switch between two models counts: the key is read once at startup, so AI on/off
+    # never changes while the server runs.
+    if not enabled or _announced_model is None or model == _announced_model:
+        return
+    _announced_model = model
+    broker.publish({"type": "config.updated", "config": app_config(app)})
 
 
 async def _cancel_tasks(tasks: list[asyncio.Task]) -> None:
@@ -247,8 +266,16 @@ async def lifespan(app: FastAPI):
         app.state.public_url = None
     app.state.storm = storm.StormController(service.add_report, service.apply_update, _publish_storm_state)
     await _resume_pending()
+    global _announced_model
     enabled, model = _ai_status()
+    _announced_model = model if enabled else None
     log.info("FloodLine ready: %d reports, AI %s", db.count_reports(), model if enabled else "off (keyword fallback)")
+    # One tiny Gemini call in the background, so the first judge's voice note does not pay for the
+    # SDK import, the TLS handshake and the models this key cannot use. Returns at once; no-op
+    # without a key, under pytest, or with FLOODLINE_AI_WARMUP=0.
+    warm_up = ai.schedule_warm_up()
+    if warm_up is not None:
+        warm_up.add_done_callback(_announce_model_change)
     try:
         yield
     finally:
@@ -257,6 +284,7 @@ async def lifespan(app: FastAPI):
             await app.state.storm.stop()
         except Exception:
             log.exception("stopping storm mode failed")
+        await ai.stop_warm_up()
         await _cancel_tasks(list(_background))
         await service.cancel_late_labels()
         db.close()

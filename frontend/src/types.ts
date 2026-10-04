@@ -140,5 +140,7 @@ export function compareReports(a: Report, b: Report): number {
   if (aLevel !== bLevel) return bLevel - aLevel
   const byScore = (b.urgency_score ?? 0) - (a.urgency_score ?? 0)
   if (byScore !== 0) return byScore
-  return Date.parse(b.created_at) - Date.parse(a.created_at)
+  const byTime = Date.parse(b.created_at) - Date.parse(a.created_at)
+  if (byTime !== 0) return byTime
+  return b.id - a.id // same instant (seeds have whole seconds): newer report first, like the server
 }
