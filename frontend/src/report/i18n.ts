@@ -119,7 +119,7 @@ const en: Strings = {
   langShort: 'EN',
   langFull: 'English',
   langSwitcher: 'Language',
-  emergency: 'In a life-threatening emergency, call 911',
+  emergency: 'In a life-threatening emergency, call\u00a0911',
 
   idleTitle: 'Report flooding',
   idleLead: 'Tap the red button and tell us what is happening, in any language.',
@@ -215,7 +215,7 @@ const en: Strings = {
   chipChildren: 'Children',
   chipDisabled: 'Person with a disability',
   chipPeople: (n) => `${n} people`,
-  done911: 'If life is in danger, call 911 now.',
+  done911: 'If life is in danger, call\u00a0911 now.',
   sendAnother: 'Send another report',
 
   seconds: (n) => (n === 1 ? '1 second' : `${n} seconds`),
@@ -245,7 +245,7 @@ const ar: Strings = {
   langShort: 'عربي',
   langFull: 'العربية',
   langSwitcher: 'اللغة',
-  emergency: 'إذا كانت حياة أحد في خطر، اتصل بـ 911',
+  emergency: 'إذا كانت حياة أحد في خطر، اتصل\u00a0بـ\u00a0911',
 
   idleTitle: 'أبلِغ عن فيضان',
   idleLead: 'اضغط على الزر الأحمر واحكِ لنا ما يحدث، بأي لغة.',
@@ -339,7 +339,7 @@ const ar: Strings = {
   chipChildren: 'أطفال',
   chipDisabled: 'شخص من ذوي الإعاقة',
   chipPeople: arabicPeople,
-  done911: 'إذا كانت حياة أحد في خطر، اتصل بـ 911 فوراً.',
+  done911: 'إذا كانت حياة أحد في خطر، اتصل\u00a0بـ\u00a0911 فوراً.',
   sendAnother: 'أرسل بلاغاً آخر',
 
   seconds: arabicSeconds,
@@ -356,7 +356,7 @@ const es: Strings = {
   langShort: 'ES',
   langFull: 'Español',
   langSwitcher: 'Idioma',
-  emergency: 'Si una vida está en peligro, llame al 911',
+  emergency: 'Si una vida está en peligro, llame al\u00a0911',
 
   idleTitle: 'Reporte una inundación',
   idleLead: 'Toque el botón rojo y cuéntenos qué pasa, en el idioma que quiera.',
@@ -453,7 +453,7 @@ const es: Strings = {
   chipChildren: 'Niños',
   chipDisabled: 'Persona con discapacidad',
   chipPeople: (n) => `${n} personas`,
-  done911: 'Si una vida está en peligro, llame al 911 ahora.',
+  done911: 'Si una vida está en peligro, llame al\u00a0911 ahora.',
   sendAnother: 'Enviar otro reporte',
 
   seconds: (n) => (n === 1 ? '1 segundo' : `${n} segundos`),
@@ -465,6 +465,7 @@ const es: Strings = {
   annUnderstood: 'Entendimos su reporte.',
 }
 
+// \u00a0 (no-break space) keeps '911' on the same line as 'call', so it is never orphaned.
 export const STRINGS: Record<UiLanguage, Strings> = { en, ar, es }
 export const LANGUAGES: UiLanguage[] = ['en', 'ar', 'es']
 
