@@ -8,7 +8,8 @@ export interface Toast {
   place: string
 }
 
-const TOAST_MS = 9000
+// Short enough that a storm's stream of CRITICALs never buries the map; the queue keeps them all.
+const TOAST_MS = 7000
 
 interface ToastsProps {
   toasts: Toast[]

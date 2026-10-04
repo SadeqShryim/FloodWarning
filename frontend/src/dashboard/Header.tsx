@@ -1,7 +1,8 @@
 // Top bar: wordmark, connection state, live counters and the demo controls.
 import { useEffect, useState } from 'react'
-import type { LiveStatus } from '../api'
-import type { StormState } from '../types'
+import type { AppConfig, StormState } from '../types'
+import { modelLabel } from './format'
+import type { ConnectionStatus } from './useLiveReports'
 
 export interface Counts {
   total: number
@@ -10,15 +11,40 @@ export interface Counts {
   processing: number
 }
 
-const STATUS_TEXT: Record<LiveStatus, string> = {
+const STATUS_TEXT: Record<ConnectionStatus, string> = {
   live: 'Live',
   polling: 'Polling every 3 s',
   connecting: 'Reconnecting...',
+  offline: 'Server unreachable, retrying',
+}
+
+/** Which brain is ranking reports right now, so judges can tell real AI from the keyword fallback. */
+function AiBadge({ config }: { config: AppConfig | null }) {
+  if (!config) return null
+  if (config.ai_enabled) {
+    const model = config.ai_model ? modelLabel(config.ai_model) : ''
+    return (
+      <span className="fl-ai is-on" title={config.ai_model ? `AI model: ${config.ai_model}` : 'Gemini AI is on'}>
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M8 0c.6 4.2 3.8 7.4 8 8-4.2.6-7.4 3.8-8 8-.6-4.2-3.8-7.4-8-8 4.2-.6 7.4-3.8 8-8z" fill="currentColor" />
+        </svg>
+        Gemini{model ? ` ${model}` : ''}
+      </span>
+    )
+  }
+  return (
+    <span className="fl-ai is-off" title="No Gemini key: typed reports are ranked by keyword rules, voice notes are flagged for review">
+      AI offline: keyword rules
+    </span>
+  )
 }
 
 interface HeaderProps {
   counts: Counts
-  status: LiveStatus
+  status: ConnectionStatus
+  config: AppConfig | null
+  sound: boolean
+  onSound: () => void
   storm: StormState
   stormBusy: boolean
   onStorm: () => void
@@ -31,7 +57,8 @@ interface HeaderProps {
 }
 
 export default function Header(props: HeaderProps) {
-  const { counts, status, storm, stormBusy, onStorm, sitrepBusy, sitrepOpen, onSitrep, qrOpen, onQr, onReset } = props
+  const { counts, status, config, sound, onSound, storm, stormBusy, onStorm, sitrepBusy, sitrepOpen, onSitrep, qrOpen, onQr, onReset } =
+    props
   return (
     <header className={`fl-head${storm.running ? ' is-storm' : ''}`}>
       <div className="fl-brand">
@@ -42,6 +69,7 @@ export default function Header(props: HeaderProps) {
           <span className="fl-live-dot" aria-hidden="true" />
           {STATUS_TEXT[status]}
         </span>
+        <AiBadge config={config} />
       </div>
 
       <dl className="fl-counters">
@@ -88,6 +116,23 @@ export default function Header(props: HeaderProps) {
           Phone QR
         </button>
         <ResetButton onReset={onReset} />
+        <button
+          type="button"
+          className={`fl-icon-btn fl-sound-btn${sound ? ' is-on' : ''}`}
+          aria-pressed={sound}
+          aria-label="Sound for new critical reports"
+          title={sound ? 'Sound on for new CRITICAL reports' : 'Sound off'}
+          onClick={onSound}
+        >
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+            <path d="M3 8h3l4-3.5v11L6 12H3z" fill="currentColor" />
+            {sound ? (
+              <path d="M13 7.5a3.5 3.5 0 010 5M15 5a7 7 0 010 10" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            ) : (
+              <path d="M13 8l4 4M17 8l-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            )}
+          </svg>
+        </button>
       </div>
     </header>
   )

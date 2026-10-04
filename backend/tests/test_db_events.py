@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from app import ai, config, db, fallback_rules, seed_data, service, urgency, util
-from app.events import Broker
+from app.events import RESYNC, Broker
 from conftest import fake_score
 
 # ---------------------------------------------------------------- db
@@ -56,16 +56,16 @@ def test_insert_keeps_given_timestamps(db_env: Any) -> None:
 
 
 def test_update_sets_updated_at_and_handles_missing(db_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(db, "utc_now_iso", lambda: "2026-10-04T10:00:00Z")
-    db.insert_report({"status": "new"})
     monkeypatch.setattr(db, "_last_write_ms", 0)
+    monkeypatch.setattr(db, "_now_ms", lambda: 1_791_108_000_000)  # 2026-10-04T10:00:00.000Z
+    db.insert_report({"status": "new"})
     monkeypatch.setattr(db, "_now_ms", lambda: 1_791_108_300_250)  # 2026-10-04T10:05:00.250Z
     updated = db.update_report(1, {"status": "dispatched", "needs": {"pumping": True}, "id": 7, "bogus": 1})
     assert updated is not None
     assert updated["id"] == 1
     assert updated["status"] == "dispatched"
     assert updated["needs"]["pumping"] is True and updated["needs"]["supplies"] is False
-    assert updated["created_at"] == "2026-10-04T10:00:00Z"
+    assert updated["created_at"] == "2026-10-04T10:00:00.000Z"  # inserts get millisecond stamps too
     assert updated["updated_at"] == "2026-10-04T10:05:00.250Z"  # milliseconds: see the next test
     assert db.update_report(42, {"status": "resolved"}) is None
 
@@ -76,12 +76,13 @@ def test_updates_in_the_same_millisecond_are_still_ordered(db_env: Any, monkeypa
     # live event), so every write needs a strictly later stamp, even when the clock has not moved.
     monkeypatch.setattr(db, "_last_write_ms", 0)
     monkeypatch.setattr(db, "_now_ms", lambda: 1_791_108_300_250)
-    db.insert_report({})
+    inserted = db.insert_report({})
     pending = db.update_report(1, {"ai_status": "pending"})
     failed = db.update_report(1, {"ai_status": "failed"})
     assert pending is not None and failed is not None
-    assert pending["updated_at"] == "2026-10-04T10:05:00.250Z"
-    assert failed["updated_at"] == "2026-10-04T10:05:00.251Z"
+    assert inserted["created_at"] == inserted["updated_at"] == "2026-10-04T10:05:00.250Z"
+    assert pending["updated_at"] == "2026-10-04T10:05:00.251Z"
+    assert failed["updated_at"] == "2026-10-04T10:05:00.252Z"
     assert util.parse_iso(failed["updated_at"]) > util.parse_iso(pending["updated_at"])
 
 
@@ -152,16 +153,17 @@ def test_broker_fans_out_and_unsubscribes() -> None:
     asyncio.run(scenario())
 
 
-def test_broker_drops_events_for_a_full_queue() -> None:
+def test_broker_cuts_off_a_full_queue_with_a_resync_marker() -> None:
     async def scenario() -> None:
         broker = Broker(queue_size=2)
         slow, fast = broker.subscribe(), broker.subscribe()
         for n in range(5):
             broker.publish({"type": "report.created", "n": n})  # must not block or raise
-            if not fast.empty():
-                fast.get_nowait()
-        assert slow.qsize() == 2
-        assert [slow.get_nowait()["n"], slow.get_nowait()["n"]] == [0, 1]
+            assert fast.get_nowait()["n"] == n  # a reader that keeps up gets every event
+        # The stalled one lost its stale backlog and got one marker telling its stream to end.
+        assert slow.qsize() == 1 and slow.get_nowait() is RESYNC
+        assert broker.subscriber_count == 1
+        broker.unsubscribe(slow)  # what the SSE generator's finally does; harmless now
 
     asyncio.run(scenario())
 

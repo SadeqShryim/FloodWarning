@@ -133,6 +133,7 @@ def queue_order(rows: Iterable[Mapping[str, Any]]) -> list:
             -_LEVEL_RANK.get(r.get("urgency_level") or "", 0),
             -(r.get("urgency_score") or 0),
             -_timestamp(r.get("created_at")),
+            -(r.get("id") or 0),  # same instant (seeds are second-precision): newer id first
         ),
     )
 
@@ -317,11 +318,22 @@ async def _enrich(report_id: int, started: float) -> dict:
         if ai_on and (audio or text or photo)
         else no_ai()
     )
-    ai_result, location_fields = await asyncio.gather(ai_call, _location_work(row), return_exceptions=True)
-    if isinstance(location_fields, BaseException):
-        if isinstance(location_fields, asyncio.CancelledError):
-            raise location_fields
-        location_fields = {}
+    # With GPS, the location work only finds a street name for the card. Nominatim allows one
+    # request a second (and can be slow or unreachable on venue Wi-Fi), so the ranked pin does not
+    # wait for that label beyond a short grace; a late label lands in a second, small update.
+    label_only = row.get("lat") is not None and row.get("lng") is not None
+    location_task = asyncio.ensure_future(_location_work(row))
+    try:
+        ai_result = (await asyncio.gather(ai_call, return_exceptions=True))[0]
+        if label_only:
+            await asyncio.wait({location_task}, timeout=LABEL_GRACE_S)
+        else:  # typed address: its coordinates are the pin, so wait (geocode has its own timeouts)
+            await asyncio.wait({location_task})
+    except asyncio.CancelledError:
+        location_task.cancel()
+        raise
+    late_label = not location_task.done()
+    location_fields = {} if late_label or location_task.cancelled() else location_task.result()
     fields: dict[str, Any] = dict(location_fields)
 
     error: BaseException | None = ai_result if isinstance(ai_result, BaseException) else None

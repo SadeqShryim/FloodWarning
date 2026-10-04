@@ -120,3 +120,14 @@ export function engineLabel(engine: string | null): string {
   if (engine === 'storm-sim') return 'Storm simulation'
   return engine
 }
+
+/** "gemini-2.5-flash" -> "2.5 Flash", "gemini-flash-latest" -> "Flash Latest". */
+export function modelLabel(model: string): string {
+  const words = model
+    .replace(/^models\//i, '')
+    .replace(/^gemini-?/i, '')
+    .split('-')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+  return words.join(' ')
+}

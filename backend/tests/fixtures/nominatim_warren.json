@@ -1,0 +1,1112 @@
+[
+{
+"place_id": 368821546,
+"osm_type": "way",
+"osm_id": 421864925,
+"lat": "42.3436929",
+"lon": "-83.1940975",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3436790",
+"42.3437070",
+"-83.1951580",
+"-83.1930370"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.193037,
+42.343707
+],
+[
+-83.195158,
+42.343679
+]
+]
+}
+},
+{
+"place_id": 368298842,
+"osm_type": "way",
+"osm_id": 415301317,
+"lat": "42.3437620",
+"lon": "-83.1888593",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437514",
+"42.3437721",
+"-83.1895996",
+"-83.1881191"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1881191,
+42.3437721
+],
+[
+-83.1895996,
+42.3437514
+]
+]
+}
+},
+{
+"place_id": 368854983,
+"osm_type": "way",
+"osm_id": 505752688,
+"lat": "42.3437427",
+"lon": "-83.1902661",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437350",
+"42.3437514",
+"-83.1909326",
+"-83.1895996"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1895996,
+42.3437514
+],
+[
+-83.1909326,
+42.343735
+]
+]
+}
+},
+{
+"place_id": 368349094,
+"osm_type": "way",
+"osm_id": 415301311,
+"lat": "42.3437270",
+"lon": "-83.1914568",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437190",
+"42.3437350",
+"-83.1919810",
+"-83.1909326"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1909326,
+42.343735
+],
+[
+-83.191981,
+42.343719
+]
+]
+}
+},
+{
+"place_id": 368811659,
+"osm_type": "way",
+"osm_id": 512612517,
+"lat": "42.3437130",
+"lon": "-83.1925090",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437070",
+"42.3437190",
+"-83.1930370",
+"-83.1919810"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.191981,
+42.343719
+],
+[
+-83.193037,
+42.343707
+]
+]
+}
+},
+{
+"place_id": 368459225,
+"osm_type": "way",
+"osm_id": 421864923,
+"lat": "42.3436728",
+"lon": "-83.1958505",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3436675",
+"42.3436759",
+"-83.1962907",
+"-83.1954102"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1954102,
+42.3436759
+],
+[
+-83.1962907,
+42.3436675
+]
+]
+}
+},
+{
+"place_id": 368413577,
+"osm_type": "way",
+"osm_id": 505752689,
+"lat": "42.3436774",
+"lon": "-83.1952841",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3436759",
+"42.3436790",
+"-83.1954102",
+"-83.1951580"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.195158,
+42.343679
+],
+[
+-83.1954102,
+42.3436759
+]
+]
+}
+},
+{
+"place_id": 368791791,
+"osm_type": "way",
+"osm_id": 415225373,
+"lat": "42.3443684",
+"lon": "-83.1624535",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3442633",
+"42.3444630",
+"-83.1664906",
+"-83.1584160"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.158416,
+42.344463
+],
+[
+-83.1664906,
+42.3442633
+]
+]
+}
+},
+{
+"place_id": 368471884,
+"osm_type": "way",
+"osm_id": 415300955,
+"lat": "42.3441157",
+"lon": "-83.1726807",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48127, United States",
+"boundingbox": [
+"42.3440300",
+"42.3441850",
+"-83.1756340",
+"-83.1697270"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.169727,
+42.344185
+],
+[
+-83.175634,
+42.34403
+]
+]
+}
+},
+{
+"place_id": 368769738,
+"osm_type": "way",
+"osm_id": 421865237,
+"lat": "42.3438801",
+"lon": "-83.1823221",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3438150",
+"42.3439280",
+"-83.1853430",
+"-83.1793010"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.179301,
+42.343928
+],
+[
+-83.185343,
+42.343815
+]
+]
+}
+},
+{
+"place_id": 368864588,
+"osm_type": "way",
+"osm_id": 504678182,
+"lat": "42.3446013",
+"lon": "-83.1523210",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3445430",
+"42.3446590",
+"-83.1548830",
+"-83.1497589"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1497589,
+42.344659
+],
+[
+-83.154883,
+42.344543
+]
+]
+}
+},
+{
+"place_id": 368702998,
+"osm_type": "way",
+"osm_id": 915153437,
+"lat": "42.3442196",
+"lon": "-83.1683956",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3441920",
+"42.3442408",
+"-83.1693005",
+"-83.1674906"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1674906,
+42.3442408
+],
+[
+-83.1693005,
+42.344192
+]
+]
+}
+},
+{
+"place_id": 368791347,
+"osm_type": "way",
+"osm_id": 505757003,
+"lat": "42.3439508",
+"lon": "-83.1785206",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3439280",
+"42.3439653",
+"-83.1793010",
+"-83.1777400"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.17774,
+42.3439653
+],
+[
+-83.179301,
+42.343928
+]
+]
+}
+},
+{
+"place_id": 368801774,
+"osm_type": "way",
+"osm_id": 415300956,
+"lat": "42.3438043",
+"lon": "-83.1859555",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437920",
+"42.3438150",
+"-83.1865680",
+"-83.1853430"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.185343,
+42.343815
+],
+[
+-83.186568,
+42.343792
+]
+]
+}
+},
+{
+"place_id": 368836673,
+"osm_type": "way",
+"osm_id": 506623721,
+"lat": "42.3445312",
+"lon": "-83.1553804",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3445195",
+"42.3445430",
+"-83.1558779",
+"-83.1548830"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.154883,
+42.344543
+],
+[
+-83.1558779,
+42.3445195
+]
+]
+}
+},
+{
+"place_id": 368791408,
+"osm_type": "way",
+"osm_id": 495864131,
+"lat": "42.3437832",
+"lon": "-83.1871635",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437770",
+"42.3437920",
+"-83.1877590",
+"-83.1865680"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.186568,
+42.343792
+],
+[
+-83.187759,
+42.343777
+]
+]
+}
+},
+{
+"place_id": 368873655,
+"osm_type": "way",
+"osm_id": 421865234,
+"lat": "42.3439964",
+"lon": "-83.1765553",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3439850",
+"42.3440081",
+"-83.1768740",
+"-83.1762366"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1762366,
+42.3440081
+],
+[
+-83.176874,
+42.343985
+]
+]
+}
+},
+{
+"place_id": 368864319,
+"osm_type": "way",
+"osm_id": 421886735,
+"lat": "42.3444853",
+"lon": "-83.1576007",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3444755",
+"42.3444950",
+"-83.1579584",
+"-83.1572430"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.157243,
+42.344495
+],
+[
+-83.1579584,
+42.3444755
+]
+]
+}
+},
+{
+"place_id": 368773011,
+"osm_type": "way",
+"osm_id": 1433788038,
+"lat": "42.3446804",
+"lon": "-83.1487661",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3446728",
+"42.3446880",
+"-83.1491011",
+"-83.1484310"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.148431,
+42.344688
+],
+[
+-83.1491011,
+42.3446728
+]
+]
+}
+},
+{
+"place_id": 368867400,
+"osm_type": "way",
+"osm_id": 421886736,
+"lat": "42.3445014",
+"lon": "-83.1569215",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3444950",
+"42.3445078",
+"-83.1572430",
+"-83.1565999"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1565999,
+42.3445078
+],
+[
+-83.157243,
+42.344495
+]
+]
+}
+},
+{
+"place_id": 368461545,
+"osm_type": "way",
+"osm_id": 504678174,
+"lat": "42.3446649",
+"lon": "-83.1494609",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3446590",
+"42.3446709",
+"-83.1497589",
+"-83.1491629"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1491629,
+42.3446709
+],
+[
+-83.1497589,
+42.344659
+]
+]
+}
+},
+{
+"place_id": 368560960,
+"osm_type": "way",
+"osm_id": 421865236,
+"lat": "42.3439788",
+"lon": "-83.1771471",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3439726",
+"42.3439850",
+"-83.1774202",
+"-83.1768740"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.176874,
+42.343985
+],
+[
+-83.1774202,
+42.3439726
+]
+]
+}
+},
+{
+"place_id": 368723984,
+"osm_type": "way",
+"osm_id": 421865235,
+"lat": "42.3442477",
+"lon": "-83.1672809",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3442408",
+"42.3442547",
+"-83.1674906",
+"-83.1670713"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1670713,
+42.3442547
+],
+[
+-83.1674906,
+42.3442408
+]
+]
+}
+},
+{
+"place_id": 374032726,
+"osm_type": "way",
+"osm_id": 505759981,
+"lat": "42.3440143",
+"lon": "-83.1760655",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3440081",
+"42.3440205",
+"-83.1762366",
+"-83.1758944"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1758944,
+42.3440205
+],
+[
+-83.1762366,
+42.3440081
+]
+]
+}
+},
+{
+"place_id": 368728232,
+"osm_type": "way",
+"osm_id": 421865233,
+"lat": "42.3442583",
+"lon": "-83.1668318",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3442547",
+"42.3442618",
+"-83.1670713",
+"-83.1665922"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1665922,
+42.3442618
+],
+[
+-83.1670713,
+42.3442547
+]
+]
+}
+},
+{
+"place_id": 368745221,
+"osm_type": "way",
+"osm_id": 915153439,
+"lat": "42.3441885",
+"lon": "-83.1695138",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3441850",
+"42.3441920",
+"-83.1697270",
+"-83.1693005"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1693005,
+42.344192
+],
+[
+-83.169727,
+42.344185
+]
+]
+}
+},
+{
+"place_id": 368853403,
+"osm_type": "way",
+"osm_id": 504678209,
+"lat": "42.3445120",
+"lon": "-83.1564242",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3445078",
+"42.3445162",
+"-83.1565999",
+"-83.1562485"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1562485,
+42.3445162
+],
+[
+-83.1565999,
+42.3445078
+]
+]
+}
+},
+{
+"place_id": 368814861,
+"osm_type": "way",
+"osm_id": 505759978,
+"lat": "42.3444673",
+"lon": "-83.1582618",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3444630",
+"42.3444716",
+"-83.1584160",
+"-83.1581076"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1581076,
+42.3444716
+],
+[
+-83.158416,
+42.344463
+]
+]
+}
+},
+{
+"place_id": 368813007,
+"osm_type": "way",
+"osm_id": 505759980,
+"lat": "42.3440253",
+"lon": "-83.1757642",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3440205",
+"42.3440300",
+"-83.1758944",
+"-83.1756340"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175634,
+42.34403
+],
+[
+-83.1758944,
+42.3440205
+]
+]
+}
+},
+{
+"place_id": 368617866,
+"osm_type": "way",
+"osm_id": 505759982,
+"lat": "42.3439689",
+"lon": "-83.1775801",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3439653",
+"42.3439726",
+"-83.1777400",
+"-83.1774202"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1774202,
+42.3439726
+],
+[
+-83.17774,
+42.3439653
+]
+]
+}
+},
+{
+"place_id": 368663967,
+"osm_type": "way",
+"osm_id": 505757004,
+"lat": "42.3437746",
+"lon": "-83.1879390",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3437721",
+"42.3437770",
+"-83.1881191",
+"-83.1877590"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.187759,
+42.343777
+],
+[
+-83.1881191,
+42.3437721
+]
+]
+}
+},
+{
+"place_id": 368813696,
+"osm_type": "way",
+"osm_id": 495658408,
+"lat": "42.3445181",
+"lon": "-83.1561503",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3445162",
+"42.3445200",
+"-83.1562485",
+"-83.1560520"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.156052,
+42.34452
+],
+[
+-83.1562485,
+42.3445162
+]
+]
+}
+},
+{
+"place_id": 368707627,
+"osm_type": "way",
+"osm_id": 505759979,
+"lat": "42.3444735",
+"lon": "-83.1580330",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3444716",
+"42.3444755",
+"-83.1581076",
+"-83.1579584"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1579584,
+42.3444755
+],
+[
+-83.1581076,
+42.3444716
+]
+]
+}
+},
+{
+"place_id": 368662454,
+"osm_type": "way",
+"osm_id": 415225374,
+"lat": "42.3442625",
+"lon": "-83.1665414",
+"category": "highway",
+"type": "secondary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3442618",
+"42.3442633",
+"-83.1665922",
+"-83.1664906"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1664906,
+42.3442633
+],
+[
+-83.1665922,
+42.3442618
+]
+]
+}
+},
+{
+"place_id": 368672593,
+"osm_type": "way",
+"osm_id": 504678166,
+"lat": "42.3446719",
+"lon": "-83.1491320",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3446709",
+"42.3446728",
+"-83.1491629",
+"-83.1491011"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1491011,
+42.3446728
+],
+[
+-83.1491629,
+42.3446709
+]
+]
+}
+},
+{
+"place_id": 368774167,
+"osm_type": "way",
+"osm_id": 504678195,
+"lat": "42.3445197",
+"lon": "-83.1559649",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Dearborn, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3445195",
+"42.3445200",
+"-83.1560520",
+"-83.1558779"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1558779,
+42.3445195
+],
+[
+-83.156052,
+42.34452
+]
+]
+}
+},
+{
+"place_id": 368817154,
+"osm_type": "way",
+"osm_id": 504678157,
+"lat": "42.3446983",
+"lon": "-83.1480234",
+"category": "highway",
+"type": "primary",
+"name": "West Warren Avenue",
+"display_name": "West Warren Avenue, Detroit, Wayne County, Michigan, 48239, United States",
+"boundingbox": [
+"42.3446880",
+"42.3447085",
+"-83.1484310",
+"-83.1476158"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1476158,
+42.3447085
+],
+[
+-83.148431,
+42.344688
+]
+]
+}
+}
+]

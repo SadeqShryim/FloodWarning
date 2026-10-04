@@ -32,6 +32,8 @@ notepad .env                                           # optional: paste GEMINI_
 .\run.ps1 --open                                       # build, start, open the tunnel, open the dashboard
 ```
 
+Setup takes about two minutes on a fresh clone and installs the exact Python package versions the demo was tested with (`scripts/constraints.txt`). If Windows answers `.\run.ps1` with "running scripts is disabled on this system", start it as `powershell -ExecutionPolicy Bypass -File .\run.ps1 --open`, or skip PowerShell: `.venv\Scripts\python.exe run.py --open`. Setup prints the form that works on your machine.
+
 You get a free Gemini key at <https://aistudio.google.com/apikey>. **No key? Everything still works.** Reports are kept and ranked with a keyword fallback (typed reports) or flagged *needs review* (voice notes).
 
 When it starts, `run.ps1` prints something like:
@@ -50,6 +52,8 @@ When it starts, `run.ps1` prints something like:
 ```
 
 The QR code on the dashboard already points at the phone URL. **Ctrl+C** stops everything.
+
+If cloudflared stops during the demo (a network change, a crash), `run.py` opens a new tunnel by itself and prints the new phone link. A quick tunnel cannot keep its old address, so the link changes: the dashboard's QR code updates on its own, and a phone that still has the old page open has to scan it again.
 
 ### `run.ps1` options
 
@@ -72,6 +76,7 @@ The dashboard also has a **Reset demo** button that restores the 25 demo reports
 .\run.ps1 --no-tunnel                      # backend on :8000
 cd frontend; npm run dev                   # Vite on :5173, proxies /api to :8000
 cd backend; ..\.venv\Scripts\python.exe -m pytest -q   # tests (no network, Gemini mocked)
+.venv\Scripts\python.exe -m pytest scripts -q          # launcher tests (tunnel restart, DNS wait; no network)
 .venv\Scripts\python.exe scripts\check_tunnel.py      # can phones reach a tunnel from this network?
 ```
 
@@ -189,11 +194,13 @@ Geocoding follows the Nominatim usage policy: at most one request per second, an
 
 **The phone says it cannot use the microphone.** Browsers allow the microphone only on `https://` pages (or `localhost`). Use the `trycloudflare.com` link or QR code, not `http://192.168...`. Without https the page offers **Type instead**, which always works. On iPhone, also check *Settings → Safari → Microphone*.
 
-**No tunnel URL / phones cannot connect.** Run `.venv\Scripts\python.exe scripts\check_tunnel.py`: it opens a test tunnel and fetches through it. Some venue networks block Cloudflare tunnels; try a phone hotspot for the laptop. If cloudflared is missing, run `scripts\get_cloudflared.ps1`. You can also paste any https URL that reaches the laptop into the dashboard's QR panel.
+**No tunnel URL / phones cannot connect.** Run `.venv\Scripts\python.exe scripts\check_tunnel.py`: it opens a test tunnel and fetches through it. Some venue networks block Cloudflare tunnels; try a phone hotspot for the laptop (`run.py` keeps retrying the tunnel every minute, so it comes up by itself once the network allows it). If cloudflared is missing, run `scripts\get_cloudflared.ps1`. You can also paste any https URL that reaches the laptop into the dashboard's QR panel.
 
 **"This site can't be reached" right after start.** A new tunnel name takes about 10-15 s to appear in DNS, and a device that asks too early remembers "not found" for about a minute. `run.py` waits until the name is live before it shows the QR code. If the laptop's own browser still says not found, run `ipconfig /flushdns`. A phone can switch Wi-Fi off and on, or simply wait a minute.
 
-**The dashboard says "polling" instead of "live".** Live updates use Server-Sent Events. Some proxies (including tunnels) buffer them, so the dashboard falls back to refreshing every 3 seconds. Use the dashboard on the laptop (`http://localhost:8000/dashboard`) for instant updates. Phones only need the report page.
+**The dashboard says "Polling every 3 s" instead of "Live".** Live updates use Server-Sent Events, and Cloudflare's free quick tunnels do not carry them (the stream never arrives). So the public `https://...trycloudflare.com/dashboard` notices within about 6 seconds and refreshes every 3 seconds instead: a new report still shows up there within about 3 seconds. Use the dashboard on the laptop (`http://localhost:8000/dashboard`) for the projector: it is live, and a new report appears in well under a second. Phones only need the report page.
+
+**"running scripts is disabled on this system".** That is Windows' default PowerShell policy. Use `powershell -ExecutionPolicy Bypass -File .\run.ps1 --open`, or `.venv\Scripts\python.exe run.py --open`, which needs no PowerShell script at all.
 
 **Gemini quota / errors.** The free tier has per-minute and per-day request limits. When a model answers 429 (quota), 403/404 or 5xx, FloodLine moves to the next model in `GEMINI_FALLBACK_MODELS`. Google can restrict older models for brand-new keys; if `gemini-2.5-flash` answers 403/404, the list falls through to `gemini-flash-latest`. If all fail, the report is kept, marked **needs review**, and still ranked (keyword fallback for typed text). The banner and `/api/health` show whether AI is on and which model answered last. Use **Retry AI** on a report once the quota resets.
 
@@ -214,7 +221,7 @@ backend/seed_audio/ sample voice notes for the demo reports (generated with edge
 frontend/src/       React app: report/ (phone page), dashboard/ (responder view)
 run.py, run.ps1     launcher: build, server, tunnel, Ctrl+C handling
 setup.ps1           one-time setup
-scripts/            get_cloudflared.ps1, check_tunnel.py
+scripts/            get_cloudflared.ps1, check_tunnel.py, constraints.txt (tested package versions), test_run.py
 ```
 
 Map data © OpenStreetMap contributors. FloodLine is a hackathon prototype. Data in the demo is simulated, and demo locations are block- or intersection-level only.

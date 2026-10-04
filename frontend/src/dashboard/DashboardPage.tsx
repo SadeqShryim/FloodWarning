@@ -16,7 +16,8 @@ import { useLiveReports, useNow } from './useLiveReports'
 import './dashboard.css'
 
 const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap'
-const MAX_TOASTS = 4
+// A storm can raise a CRITICAL every second; three at a time keeps most of the map visible.
+const MAX_TOASTS = 3
 
 // Per-viewer conveniences only; the page works the same when storage is blocked.
 function readPref(key: string, fallback: string): string {
@@ -33,6 +34,48 @@ function writePref(key: string, value: string) {
   } catch {
     // private mode or blocked storage: nothing to remember
   }
+}
+
+/** A short two-tone alert, synthesized (no audio file), at most once every 1.5 s. */
+function useAlertSound(enabled: boolean) {
+  const ctxRef = useRef<AudioContext | null>(null)
+  const lastRef = useRef(0)
+  const enabledRef = useRef(enabled)
+  useEffect(() => {
+    enabledRef.current = enabled
+    // The toggle click is the user gesture that lets the browser start audio.
+    if (enabled && !ctxRef.current) {
+      try {
+        ctxRef.current = new AudioContext()
+      } catch {
+        ctxRef.current = null
+      }
+    }
+    void ctxRef.current?.resume().catch(() => undefined)
+  }, [enabled])
+  useEffect(() => () => void ctxRef.current?.close().catch(() => undefined), [])
+
+  return useCallback(() => {
+    const ctx = ctxRef.current
+    if (!enabledRef.current || !ctx || ctx.state !== 'running') return
+    const nowMs = Date.now()
+    if (nowMs - lastRef.current < 1500) return
+    lastRef.current = nowMs
+    const t = ctx.currentTime
+    for (const [i, freq] of [880, 660].entries()) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      const start = t + i * 0.16
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14)
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(start)
+      osc.stop(start + 0.15)
+    }
+  }, [])
 }
 
 function prefersReducedMotion(): boolean {
@@ -71,6 +114,18 @@ function clearAreaPadding(map: L.Map): Pick<L.FitBoundsOptions, 'paddingTopLeft'
   return { paddingTopLeft: [left, top], paddingBottomRight: [64, 64] }
 }
 
+/**
+ * Padding for framing every report: keep pins out from under the QR panel (top right), which is
+ * open for most of the demo. Falls back to plain padding when that would leave too little map.
+ */
+function framePadding(map: L.Map): Pick<L.FitBoundsOptions, 'paddingTopLeft' | 'paddingBottomRight'> {
+  const box = map.getContainer().getBoundingClientRect()
+  const qr = document.querySelector('.fl-qr')?.getBoundingClientRect()
+  const right = qr ? Math.max(48, box.right - qr.left + 24) : 48
+  if (box.width - right - 48 < 320) return { paddingTopLeft: [48, 48], paddingBottomRight: [48, 48] }
+  return { paddingTopLeft: [48, 48], paddingBottomRight: [right, 48] }
+}
+
 function errorText(err: unknown, action: string): string {
   return err instanceof Error ? `${action}: ${err.message}` : `${action}.`
 }
@@ -81,7 +136,10 @@ export default function DashboardPage() {
 
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastSeq = useRef(0)
+  const [sound, setSound] = useState(() => readPref('fl.sound', '0') === '1')
+  const playAlert = useAlertSound(sound)
   const onCritical = useCallback((report: Report) => {
+    playAlert()
     toastSeq.current += 1
     const toast: Toast = {
       key: toastSeq.current,
@@ -90,7 +148,7 @@ export default function DashboardPage() {
       place: placeLabel(report),
     }
     setToasts((prev) => [toast, ...prev.filter((t) => t.reportId !== report.id)].slice(0, MAX_TOASTS))
-  }, [])
+  }, [playAlert])
 
   const live = useLiveReports({ onCritical })
   const { reports, sorted, status, storm, config, epoch, flashes, upsert, expectReload, replaceAll, setConfig, setStorm } =
@@ -146,6 +204,7 @@ export default function DashboardPage() {
 
   useEffect(() => writePref('fl.queueFilter', filter), [filter])
   useEffect(() => writePref('fl.qrOpen', qrOpen ? '1' : '0'), [qrOpen])
+  useEffect(() => writePref('fl.sound', sound ? '1' : '0'), [sound])
 
   // Errors from header actions show briefly over the map instead of blocking anything.
   useEffect(() => {
@@ -161,7 +220,7 @@ export default function DashboardPage() {
       .filter(hasCoords)
       .map((r) => L.latLng(r.lat, r.lng))
     if (points.length === 0) return
-    map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 15, animate: false })
+    map.fitBounds(L.latLngBounds(points), { ...framePadding(map), maxZoom: 15, animate: false })
   }, [map, epoch])
 
   // Before the first snapshot, center on whatever the server says the city is.
@@ -195,15 +254,33 @@ export default function DashboardPage() {
   // From the map: the pin is already in view, so just select it.
   const selectFromMap = useCallback((id: number) => setSelectedId(id), [])
 
-  const closeDrawer = useCallback(() => setSelectedId(null), [])
+  // Closing the drawer uncovers the queue: put keyboard focus back on the report's card, scrolled
+  // into view, so the queue does not lose your place (it may have reordered meanwhile).
+  const returnFocusTo = useRef<number | null>(null)
+  const closeDrawer = useCallback(() => {
+    setSelectedId((id) => {
+      returnFocusTo.current = id
+      return null
+    })
+  }, [])
+
+  useEffect(() => {
+    if (selectedId != null || returnFocusTo.current == null) return
+    const id = returnFocusTo.current
+    returnFocusTo.current = null
+    const button = document.querySelector<HTMLButtonElement>(`.fl-queue [data-report-id="${id}"]`)
+    if (!button) return
+    button.focus({ preventScroll: true })
+    button.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+  }, [selectedId])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedId(null)
+      if (event.key === 'Escape') closeDrawer()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [closeDrawer])
 
   const focusHotspot = useCallback(
     (hotspot: Hotspot) => {
@@ -219,6 +296,31 @@ export default function DashboardPage() {
       map.flyToBounds(bounds, { ...clearAreaPadding(map), maxZoom: 16, duration: prefersReducedMotion() ? 0 : 0.7 })
     },
     [map],
+  )
+
+  // Arrow keys inside the drawer: step through the queue in the order it is shown.
+  const sortedRef = useRef(sorted)
+  useEffect(() => {
+    sortedRef.current = sorted
+  }, [sorted])
+  const stepSelection = useCallback(
+    (delta: 1 | -1) => {
+      const all = sortedRef.current
+      const shown = filter === 'open' ? all.filter((r) => r.status === 'new') : all
+      if (shown.length === 0) return
+      const index = shown.findIndex((r) => r.id === selectedId)
+      let next: Report | undefined
+      if (index >= 0) {
+        next = shown[Math.min(shown.length - 1, Math.max(0, index + delta))]
+      } else {
+        // The selected report left the Open view (dispatched): continue from where it sits overall.
+        const pos = all.findIndex((r) => r.id === selectedId)
+        const after = shown.findIndex((r) => all.indexOf(r) > pos)
+        next = delta > 0 ? shown[after] : shown[(after < 0 ? shown.length : after) - 1]
+      }
+      if (next && next.id !== selectedId) selectAndFly(next.id)
+    },
+    [filter, selectedId, selectAndFly],
   )
 
   const dismissToast = useCallback((key: number) => setToasts((prev) => prev.filter((t) => t.key !== key)), [])
@@ -279,6 +381,9 @@ export default function DashboardPage() {
       <Header
         counts={counts}
         status={status}
+        config={config}
+        sound={sound}
+        onSound={() => setSound((v) => !v)}
         storm={storm}
         stormBusy={stormBusy}
         onStorm={toggleStorm}
@@ -332,9 +437,19 @@ export default function DashboardPage() {
             onFilter={setFilter}
             openCount={openCount}
             onSelect={selectAndFly}
+            covered={!!selected}
           />
           {/* Keyed by report, so a newly selected report starts with fresh busy/error state. */}
-          {selected && <Drawer key={selected.id} report={selected} now={now} onClose={closeDrawer} onUpdated={upsert} />}
+          {selected && (
+            <Drawer
+              key={selected.id}
+              report={selected}
+              now={now}
+              onClose={closeDrawer}
+              onUpdated={upsert}
+              onStep={stepSelection}
+            />
+          )}
         </div>
       </main>
     </div>

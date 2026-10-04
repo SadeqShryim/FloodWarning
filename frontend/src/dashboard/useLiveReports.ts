@@ -6,6 +6,9 @@ import { compareReports } from '../types'
 
 export type ChangeKind = 'new' | 'changed'
 
+/** What the header shows. 'offline' = polling, but no poll has reached the server for a while. */
+export type ConnectionStatus = LiveStatus | 'offline'
+
 /** A recent change to one report. `stamp` is unique per change so the flash animation can restart. */
 export interface Flash {
   kind: ChangeKind
@@ -15,7 +18,7 @@ export interface Flash {
 export interface LiveReports {
   reports: Map<number, Report>
   sorted: Report[]
-  status: LiveStatus
+  status: ConnectionStatus
   storm: StormState
   config: AppConfig | null
   /** Bumps when the whole data set is replaced from scratch (first load, demo reset). */
@@ -37,6 +40,12 @@ interface Options {
 }
 
 const FLASH_MS = 2400
+// A stream stuck in "connecting" this long is re-opened from scratch. The browser's own EventSource
+// retry can hang on a proxy or tunnel that holds the request open without answering, and api.ts
+// only arms its "no hello, fall back to polling" timer on a fresh connect.
+const STUCK_CONNECTING_MS = 10000
+// Polling succeeds every 3 s; this long without a fresh list means the server is unreachable.
+const OFFLINE_AFTER_MS = 8000
 
 // What the queue shows changing. updated_at is part of it, but a fresh insert carries
 // updated_at == created_at (whole seconds), so the visible fields are compared too.
@@ -58,6 +67,9 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [epoch, setEpoch] = useState(0)
   const [flashes, setFlashes] = useState<Map<number, Flash>>(() => new Map())
+  const [subscription, setSubscription] = useState(0) // bump to re-open the event stream
+  const [offline, setOffline] = useState(false)
+  const lastSnapshotAt = useRef(Date.now())
 
   // The ref is the source of truth for diffing; state mirrors it for rendering. Doing the diff
   // outside setState keeps side effects (toasts) from running twice under StrictMode.
@@ -121,7 +133,20 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
 
   const applySnapshot = useCallback(
     (list: Report[]) => {
-      const current = reportsRef.current
+      // The same id with a different creation time means the server was reset behind our back (for
+      // example from another dashboard while this one was polling and missed the 'reset' event):
+      // treat it as a fresh load, so reseeded reports do not flash, toast or keep a stale selection.
+      if (loadedRef.current) {
+        const replaced = list.some((r) => {
+          const prev = reportsRef.current.get(r.id)
+          return !!prev && prev.created_at !== r.created_at
+        })
+        if (replaced) {
+          loadedRef.current = false
+          setFlashes(new Map())
+        }
+      }
+      const current = loadedRef.current ? reportsRef.current : new Map<number, Report>()
       const next = new Map<number, Report>()
       for (const report of list) {
         const prev = current.get(report.id)
@@ -133,6 +158,8 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
         next.set(report.id, report)
       }
       commit(next)
+      lastSnapshotAt.current = Date.now()
+      setOffline(false)
       if (!loadedRef.current) {
         loadedRef.current = true
         setEpoch((e) => e + 1)
@@ -172,20 +199,43 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
       }
     }
     const unsubscribe = subscribeEvents(handle, setStatus)
+    return unsubscribe
+  }, [applySnapshot, expectReload, upsert, subscription])
+
+  useEffect(() => {
     const timers = flashTimers.current
     return () => {
-      unsubscribe()
       for (const t of timers.values()) window.clearTimeout(t)
       timers.clear()
     }
-  }, [applySnapshot, expectReload, upsert])
+  }, [])
+
+  // Watchdog for a reconnect that never resolves (see STUCK_CONNECTING_MS).
+  useEffect(() => {
+    if (status !== 'connecting') return
+    const t = window.setTimeout(() => setSubscription((n) => n + 1), STUCK_CONNECTING_MS)
+    return () => window.clearTimeout(t)
+  }, [status, subscription])
+
+  // While polling, notice when the polls stop reaching the server.
+  useEffect(() => {
+    if (status !== 'polling') {
+      setOffline(false)
+      return
+    }
+    lastSnapshotAt.current = Math.max(lastSnapshotAt.current, Date.now() - 3000)
+    const id = window.setInterval(() => {
+      setOffline(Date.now() - lastSnapshotAt.current > OFFLINE_AFTER_MS)
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [status])
 
   const sorted = useMemo(() => Array.from(reports.values()).sort(compareReports), [reports])
 
   return {
     reports,
     sorted,
-    status,
+    status: status === 'polling' && offline ? 'offline' : status,
     storm,
     config,
     epoch,

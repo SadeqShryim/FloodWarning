@@ -6,6 +6,7 @@ seed data). Tests that need specific behavior monkeypatch those fakes again.
 """
 from __future__ import annotations
 
+import socket
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -48,6 +49,64 @@ def make_extraction(**overrides: Any) -> Extraction:
     }
     data.update(overrides)
     return Extraction.model_validate(data)
+
+
+# ---------------------------------------------------------------- hermetic by default (every test)
+
+_LOOPBACK = {"127.0.0.1", "::1", "localhost", "testserver", "test"}
+_real_getaddrinfo = socket.getaddrinfo
+_real_connect = socket.socket.connect
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "real_gemini_key: keep the Gemini key from .env / the environment for this test (live calls cost quota; "
+        "never use it in the normal suite)",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_gemini_key(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The moment someone puts a key in .env, config.GEMINI_API_KEY holds it at import time. Hide it
+    from every test (and forget any client built with it) so the suite never spends real quota.
+    Tests that exercise the Gemini path set their own fake key and fake client on top of this."""
+    if request.node.get_closest_marker("real_gemini_key"):
+        return
+    monkeypatch.setattr(config, "GEMINI_API_KEY", None)
+    # ai.py's private memory (cached client, model choice); whichever of these it currently has.
+    fresh: dict[str, Any] = {"_client": None, "_client_key": None, "_last_model": None,
+                             "_unavailable": set(), "_no_thinking": set()}
+    for name, value in fresh.items():
+        if hasattr(ai, name):
+            monkeypatch.setattr(ai, name, value)
+
+
+@pytest.fixture(autouse=True)
+def _no_network(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail fast on any connection that leaves the machine (Gemini, Nominatim, Overpass, ...).
+    Loopback stays open for the tests that run a real uvicorn server."""
+    if request.node.get_closest_marker("real_gemini_key"):
+        return
+
+    def host_of(address: Any) -> str:
+        return str(address[0] if isinstance(address, tuple) else address)
+
+    def guarded_getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if host is not None and str(host) not in _LOOPBACK:
+            raise OSError(f"test tried to reach the network: DNS lookup of {host!r}")
+        return _real_getaddrinfo(host, *args, **kwargs)
+
+    def guarded_connect(sock: socket.socket, address: Any) -> Any:
+        if sock.family in (socket.AF_INET, socket.AF_INET6) and host_of(address) not in _LOOPBACK:
+            raise OSError(f"test tried to reach the network: connect to {address!r}")
+        return _real_connect(sock, address)
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+
+
+# ---------------------------------------------------------------- fakes for the app
 
 
 async def _no_geocode(query: str) -> None:

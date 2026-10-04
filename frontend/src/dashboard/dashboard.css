@@ -15,7 +15,9 @@
   --ink: #edf1f4;
   --ink-2: #c9d2d9;
   --muted: #93a0ab;
-  --faint: #62707c;
+  /* Projector floor: small text is at least 0.86em (12.6 px at 1366 wide) and every text color
+     reaches 4.5:1 on the panels, since projectors wash out low contrast. */
+  --faint: #8a98a6;
   --focus: #edf1f4;
   --radius: 6px;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -264,6 +266,44 @@
   animation: fl-blink 1s steps(2) infinite;
 }
 
+.fl-live.is-offline {
+  color: var(--ink);
+}
+
+.fl-live.is-offline .fl-live-dot {
+  background: var(--fl-critical);
+  animation: fl-blink 1s steps(2) infinite;
+}
+
+/* AI mode: which brain ranks the reports, readable from the back of the room. */
+.fl-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.22em 0.6em;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 0.86em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fl-ai.is-on {
+  border-color: color-mix(in srgb, var(--fl-low) 55%, var(--line-strong));
+  background: color-mix(in srgb, var(--fl-low) 14%, var(--bg));
+  color: var(--ink);
+}
+
+.fl-ai.is-on svg {
+  color: #8ab8ff;
+}
+
+.fl-ai.is-off {
+  border-color: color-mix(in srgb, var(--fl-medium) 60%, var(--line-strong));
+  background: color-mix(in srgb, var(--fl-medium) 10%, var(--bg));
+  color: #f7d36b;
+}
+
 @keyframes fl-breathe {
   0% {
     transform: scale(0.6);
@@ -301,7 +341,7 @@
 }
 
 .fl-counters dt {
-  font-size: 0.78em;
+  font-size: 0.86em;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -363,6 +403,17 @@
 .fl-confirm-q {
   font-size: 0.9em;
   white-space: nowrap;
+}
+
+.fl-sound-btn {
+  width: 2.3em;
+  height: 2.3em;
+  border: 1px solid var(--line-strong);
+}
+
+.fl-sound-btn.is-on {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 /* ---------- Main layout ---------- */
@@ -538,7 +589,7 @@
   color: var(--ink);
   box-shadow: none;
   font: inherit;
-  font-size: 0.82em;
+  font-size: 0.86em;
   cursor: pointer;
 }
 
@@ -568,7 +619,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(14, 20, 25, 0.82);
-  font-size: 0.8em;
+  font-size: 0.86em;
   color: var(--ink-2);
   pointer-events: none;
 }
@@ -725,7 +776,7 @@
   padding: 0.1em 0.5em;
   border: 1px solid var(--line-strong);
   border-radius: 3px;
-  font-size: 0.78em;
+  font-size: 0.86em;
   color: var(--ink-2);
 }
 
@@ -786,7 +837,7 @@
 
 .fl-hot-n,
 .fl-sitrep-time {
-  font-size: 0.82em;
+  font-size: 0.86em;
   color: var(--muted);
 }
 
@@ -829,7 +880,7 @@
 }
 
 .fl-toast-kicker {
-  font-size: 0.8em;
+  font-size: 0.86em;
   font-weight: 800;
   color: var(--fl-critical);
 }
@@ -1014,7 +1065,7 @@
   border-radius: 3px;
   background: var(--lvl);
   color: var(--bg);
-  font-size: 0.78em;
+  font-size: 0.86em;
   font-weight: 800;
   font-stretch: 88%;
   letter-spacing: 0.02em;
@@ -1038,7 +1089,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: 0.35em;
-  font-size: 0.8em;
+  font-size: 0.86em;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -1049,7 +1100,7 @@
 
 .fl-card-time {
   margin-left: auto;
-  font-size: 0.8em;
+  font-size: 0.86em;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1128,7 +1179,7 @@
   padding: 0.05em 0.45em;
   border: 1px solid var(--line-strong);
   border-radius: 3px;
-  font-size: 0.78em;
+  font-size: 0.86em;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -1145,7 +1196,7 @@
   display: inline-block;
   padding: 0.05em 0.5em;
   border-radius: 999px;
-  font-size: 0.78em;
+  font-size: 0.86em;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1220,6 +1271,16 @@
   background: var(--panel);
   border-top: 4px solid var(--lvl);
   animation: fl-drawer-in 180ms var(--ease);
+}
+
+/* Focus lands on the drawer itself when it opens; only show a ring for keyboard users. */
+.fl-drawer:focus {
+  outline: none;
+}
+
+.fl-drawer:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 @keyframes fl-drawer-in {
@@ -1325,7 +1386,7 @@
   display: flex;
   align-items: baseline;
   gap: 0.6em;
-  font-size: 0.82em;
+  font-size: 0.86em;
   font-weight: 700;
   color: var(--muted);
 }
@@ -1408,7 +1469,7 @@
 }
 
 .fl-fields dt {
-  font-size: 0.78em;
+  font-size: 0.86em;
   color: var(--muted);
 }
 

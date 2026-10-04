@@ -275,6 +275,15 @@ def reset_data(path: Path) -> None:
     say(f"[run] Deleted {path} (fresh database and demo reports on start).")
 
 
+# A dashboard that cannot get live events (e.g. through the tunnel) polls these every 3 s. Their
+# access-log lines would bury what matters (new reports, errors, tunnel news) in the console.
+_ROUTINE_REQUEST_RE = re.compile(r'"GET /api/(reports|config|health) HTTP/[\d.]+" 200\b')
+
+
+def is_routine_request(line: str) -> bool:
+    return _ROUTINE_REQUEST_RE.search(line) is not None
+
+
 def start_backend(port: int) -> subprocess.Popen:
     python, env = python_for_child()
     env["PYTHONUNBUFFERED"] = "1"  # log lines show up immediately, not in 4 KB chunks
@@ -292,7 +301,7 @@ def start_backend(port: int) -> subprocess.Popen:
         creationflags=_NEW_GROUP,
     )
     _job.add(proc)
-    pump_output(proc, lambda line: say(f"[server] {line}"))
+    pump_output(proc, lambda line: None if is_routine_request(line) else say(f"[server] {line}"))
     return proc
 
 

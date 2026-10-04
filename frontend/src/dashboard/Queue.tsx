@@ -117,9 +117,11 @@ interface QueueProps {
   onFilter: (filter: QueueFilter) => void
   openCount: number
   onSelect: (id: number) => void
+  /** The drawer is drawn over the queue: take it out of the tab order and the accessibility tree. */
+  covered?: boolean
 }
 
-export default function Queue({ reports, selectedId, flashes, now, filter, onFilter, openCount, onSelect }: QueueProps) {
+export default function Queue({ reports, selectedId, flashes, now, filter, onFilter, openCount, onSelect, covered = false }: QueueProps) {
   const listRef = useRef<HTMLOListElement>(null)
   const lastTops = useRef<Map<number, number>>(new Map())
 
@@ -174,7 +176,7 @@ export default function Queue({ reports, selectedId, flashes, now, filter, onFil
   }
 
   return (
-    <section className="fl-queue" aria-label="Ranked report queue">
+    <section className="fl-queue" aria-label="Ranked report queue" inert={covered}>
       <div className="fl-queue-head">
         <h2 className="fl-queue-title">Queue</h2>
         <div className="fl-seg" role="group" aria-label="Which reports to show">

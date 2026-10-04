@@ -1,5 +1,5 @@
 // Detail drawer for one report: what was said, what the AI understood, and the responder actions.
-import { useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../api'
 import type { Report, ReportStatus } from '../types'
 import {
@@ -37,14 +37,40 @@ interface DrawerProps {
   now: number
   onClose: () => void
   onUpdated: (report: Report) => void
+  /** Move the selection to the next (+1) or previous (-1) report in queue order. */
+  onStep: (delta: 1 | -1) => void
 }
 
 type Busy = ReportStatus | 'reprocess' | null
 
-export default function Drawer({ report, now, onClose, onUpdated }: DrawerProps) {
+export default function Drawer({ report, now, onClose, onUpdated, onStep }: DrawerProps) {
   // The parent keys this component by report id, so these start fresh for each report.
   const [busy, setBusy] = useState<Busy>(null)
   const [error, setError] = useState<string | null>(null)
+  const rootRef = useRef<HTMLElement>(null)
+
+  // The drawer covers the queue, so keyboard focus moves into it (one mount per selected report).
+  useEffect(() => {
+    rootRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  // Dispatch / Resolve swap the buttons out from under the focus; keep focus in the drawer.
+  const keepFocus = () => {
+    window.requestAnimationFrame(() => {
+      const root = rootRef.current
+      if (root && (document.activeElement === document.body || !document.activeElement)) root.focus({ preventScroll: true })
+    })
+  }
+
+  // Up/Down walk the queue without leaving the drawer, like they do in the queue itself.
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    const target = event.target as HTMLElement
+    if (target.closest('audio, input, textarea, select')) return
+    event.preventDefault()
+    onStep(event.key === 'ArrowDown' ? 1 : -1)
+  }
 
   const run = async (kind: Exclude<Busy, null>, call: () => Promise<Report>) => {
     setBusy(kind)
@@ -55,6 +81,7 @@ export default function Drawer({ report, now, onClose, onUpdated }: DrawerProps)
       setError(err instanceof Error ? `Could not update report: ${err.message}` : 'Could not update report.')
     } finally {
       setBusy(null)
+      keepFocus()
     }
   }
 
@@ -73,7 +100,14 @@ export default function Drawer({ report, now, onClose, onUpdated }: DrawerProps)
   const chips = report.urgency_reasons.filter((r) => r !== 'needs review')
 
   return (
-    <aside className={`fl-drawer ${levelClass(pending ? null : report.urgency_level)}`} aria-label={`Report ${report.id}`}>
+    <aside
+      ref={rootRef}
+      className={`fl-drawer ${levelClass(pending ? null : report.urgency_level)}`}
+      aria-label={`Report ${report.id} details`}
+      aria-keyshortcuts="ArrowUp ArrowDown Escape"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+    >
       <header className="fl-drawer-head">
         <div className="fl-drawer-id">
           {pending ? (

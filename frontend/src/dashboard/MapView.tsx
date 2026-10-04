@@ -157,6 +157,9 @@ export default function MapView({ reports, selectedId, hotspots, onSelect, onHot
       center={center}
       zoom={zoom}
       zoomControl
+      // Quarter-step zoom when framing all reports, so keeping pins clear of the QR panel costs a
+      // little zoom instead of a whole level (the +/- buttons still move one level).
+      zoomSnap={0.25}
       preferCanvas={false}
       worldCopyJump={false}
       attributionControl

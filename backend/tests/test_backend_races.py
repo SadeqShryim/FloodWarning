@@ -174,9 +174,11 @@ def test_reprocess_spam_runs_one_ai_call_at_a_time(app_env: Any, monkeypatch: py
     assert calls["n"] == 2  # the POST, then exactly one reprocess
 
 
-def test_enrichment_cancelled_mid_flight_is_not_left_pending(app_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Anything that cancels the AI task (other than a reset or shutdown) must not strand the report."""
-    slow_ai(monkeypatch, 5.0)
+def test_a_cancelled_ai_step_can_be_retried(app_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Shutdown cancels running AI steps and leaves those reports "pending" on purpose (the next
+    start re-runs them, see test_pending_reports_from_a_previous_run_are_resumed). Within one run,
+    "Retry AI" must still work on such a report instead of answering "already running"."""
+    calls = slow_ai(monkeypatch, 5.0)
     monkeypatch.setattr(config, "POST_WAIT_S", 0.05)
 
     async def scenario() -> dict:
@@ -185,12 +187,15 @@ def test_enrichment_cancelled_mid_flight_is_not_left_pending(app_env: Any, monke
             task = main._enrichments[created["id"]]
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-            await asyncio.sleep(0.05)
+            slow_ai(monkeypatch, 0.05)
+            retried = (await client.post(f"/api/reports/{created['id']}/reprocess")).json()
+            assert retried["ai_status"] == "pending"
+            await asyncio.sleep(0.3)
             return (await client.get(f"/api/reports/{created['id']}")).json()
 
     final = asyncio.run(scenario())
-    assert final["ai_status"] == "failed"
-    assert final["urgency_level"] is not None
+    assert calls["n"] == 1
+    assert final["ai_status"] == "done" and final["urgency_level"] is not None
 
 
 def test_enrichment_crash_marks_failed(app_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -266,18 +271,22 @@ def test_a_stalled_dashboard_is_told_to_resync_instead_of_silently_missing_event
             broker.publish({"type": "storm.state", "running": True, "injected": 1})
             assert healthy.get_nowait()["type"] == "storm.state"
             broker.unsubscribe(healthy)
-            async for chunk in stream:
-                chunks.append(chunk)
-                if len(chunks) > broker._queue_size + 100:
-                    break
+            async def drain() -> None:
+                async for chunk in stream:
+                    chunks.append(chunk)
+                    if len(chunks) > broker._queue_size + 100:
+                        break
+
+            await asyncio.wait_for(drain(), timeout=5)
             return chunks
 
     chunks = asyncio.run(scenario())
-    assert len(chunks) < 400, "the overflowed stream should end, not keep streaming stale events"
+    assert chunks[-1] == "retry: 1000\n\n", "the stream should end with a reconnect hint"
+    assert len(chunks) == 2, "the stale backlog is thrown away; the reconnect reloads everything"
     assert broker.subscriber_count == 0
 
 
-def test_publish_with_many_full_subscribers_stays_fast(app_env: Any) -> None:
+def test_publish_with_many_stalled_subscribers_stays_fast_and_quiet(app_env: Any, caplog: pytest.LogCaptureFixture) -> None:
     async def scenario() -> float:
         queues = [broker.subscribe() for _ in range(50)]
         loop = asyncio.get_running_loop()
@@ -290,6 +299,8 @@ def test_publish_with_many_full_subscribers_stays_fast(app_env: Any) -> None:
         return elapsed
 
     assert asyncio.run(scenario()) < 2.0
+    warnings = [r for r in caplog.records if "fell" in r.getMessage()]
+    assert len(warnings) == 50  # one line per stalled dashboard, not one per dropped event
 
 
 # ---------------------------------------------------------------- odd inputs

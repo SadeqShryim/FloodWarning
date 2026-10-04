@@ -1,0 +1,1232 @@
+[
+{
+"place_id": 368738159,
+"osm_type": "way",
+"osm_id": 734166380,
+"lat": "42.3077119",
+"lon": "-83.1778330",
+"category": "landuse",
+"type": "commercial",
+"name": "Schaefer Court",
+"display_name": "Schaefer Court, Dearborn, Wayne County, Michigan, United States",
+"boundingbox": [
+"42.3065832",
+"42.3102925",
+"-83.1795713",
+"-83.1756124"
+],
+"geojson": {
+"type": "Polygon",
+"coordinates": [
+[
+[
+-83.1795713,
+42.3088405
+],
+[
+-83.1779405,
+42.3065832
+],
+[
+-83.1756553,
+42.3090865
+],
+[
+-83.1756124,
+42.3101933
+],
+[
+-83.1756499,
+42.3102647
+],
+[
+-83.1758431,
+42.3102925
+],
+[
+-83.1795713,
+42.3088405
+]
+]
+]
+}
+},
+{
+"place_id": 365131841,
+"osm_type": "way",
+"osm_id": 79670987,
+"lat": "42.2979672",
+"lon": "-83.1732785",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.2974160",
+"42.2988080",
+"-83.1741420",
+"-83.1721980"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.174142,
+42.298808
+],
+[
+-83.173468,
+42.298087
+],
+[
+-83.172198,
+42.297416
+]
+]
+}
+},
+{
+"place_id": 369096247,
+"osm_type": "way",
+"osm_id": 8735141,
+"lat": "42.2982957",
+"lon": "-83.1733841",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.2978370",
+"42.2988710",
+"-83.1739868",
+"-83.1726810"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.172681,
+42.297837
+],
+[
+-83.173582,
+42.29843
+],
+[
+-83.1739868,
+42.298871
+]
+]
+}
+},
+{
+"place_id": 369656418,
+"osm_type": "way",
+"osm_id": 220188913,
+"lat": "42.2992527",
+"lon": "-83.1742610",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.2988710",
+"42.2996344",
+"-83.1745352",
+"-83.1739868"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1739868,
+42.298871
+],
+[
+-83.1745352,
+42.2996344
+]
+]
+}
+},
+{
+"place_id": 369485955,
+"osm_type": "way",
+"osm_id": 720345808,
+"lat": "42.3122816",
+"lon": "-83.1755373",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3108730",
+"42.3136901",
+"-83.1755957",
+"-83.1754790"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175479,
+42.310873
+],
+[
+-83.1755957,
+42.3136901
+]
+]
+}
+},
+{
+"place_id": 368730054,
+"osm_type": "way",
+"osm_id": 507312463,
+"lat": "42.3029736",
+"lon": "-83.1753694",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3024670",
+"42.3034984",
+"-83.1755590",
+"-83.1752520"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175559,
+42.302467
+],
+[
+-83.175252,
+42.3034984
+]
+]
+}
+},
+{
+"place_id": 368823091,
+"osm_type": "way",
+"osm_id": 79670991,
+"lat": "42.2999457",
+"lon": "-83.1747582",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.2996344",
+"42.3002561",
+"-83.1749824",
+"-83.1745352"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1745352,
+42.2996344
+],
+[
+-83.1749824,
+42.3002561
+]
+]
+}
+},
+{
+"place_id": 366755086,
+"osm_type": "way",
+"osm_id": 499916060,
+"lat": "42.3236393",
+"lon": "-83.1760073",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, East Dearborn Downtown, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3225222",
+"42.3247560",
+"-83.1760620",
+"-83.1759628"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1759628,
+42.3225222
+],
+[
+-83.176062,
+42.324756
+]
+]
+}
+},
+{
+"place_id": 367659792,
+"osm_type": "way",
+"osm_id": 70193630,
+"lat": "42.2976413",
+"lon": "-83.1724255",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.2974160",
+"42.2978370",
+"-83.1726810",
+"-83.1721980"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.172198,
+42.297416
+],
+[
+-83.172681,
+42.297837
+]
+]
+}
+},
+{
+"place_id": 368039754,
+"osm_type": "way",
+"osm_id": 507317705,
+"lat": "42.3005101",
+"lon": "-83.1751714",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3002561",
+"42.3007750",
+"-83.1753450",
+"-83.1749824"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1749824,
+42.3002561
+],
+[
+-83.175345,
+42.300775
+]
+]
+}
+},
+{
+"place_id": 368385096,
+"osm_type": "way",
+"osm_id": 507312469,
+"lat": "42.3074017",
+"lon": "-83.1752714",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3067007",
+"42.3081032",
+"-83.1753130",
+"-83.1752220"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175222,
+42.3067007
+],
+[
+-83.175313,
+42.3081032
+]
+]
+}
+},
+{
+"place_id": 364905457,
+"osm_type": "way",
+"osm_id": 72359151,
+"lat": "42.3059321",
+"lon": "-83.1751724",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3051620",
+"42.3067007",
+"-83.1752220",
+"-83.1751540"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175154,
+42.305162
+],
+[
+-83.175222,
+42.3067007
+]
+]
+}
+},
+{
+"place_id": 364912317,
+"osm_type": "way",
+"osm_id": 507295066,
+"lat": "42.3358989",
+"lon": "-83.1764916",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3351401",
+"42.3366573",
+"-83.1765245",
+"-83.1764618"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1764618,
+42.3351401
+],
+[
+-83.1765245,
+42.3366573
+]
+]
+}
+},
+{
+"place_id": 367942173,
+"osm_type": "way",
+"osm_id": 438372791,
+"lat": "42.3306427",
+"lon": "-83.1762784",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3299904",
+"42.3312950",
+"-83.1763040",
+"-83.1762530"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.176253,
+42.3299904
+],
+[
+-83.176304,
+42.331295
+]
+]
+}
+},
+{
+"place_id": 368929031,
+"osm_type": "way",
+"osm_id": 507306402,
+"lat": "42.3143024",
+"lon": "-83.1756210",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3136901",
+"42.3149148",
+"-83.1756443",
+"-83.1755957"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1755957,
+42.3136901
+],
+[
+-83.1756443,
+42.3149148
+]
+]
+}
+},
+{
+"place_id": 367887173,
+"osm_type": "way",
+"osm_id": 39800693,
+"lat": "42.3086071",
+"lon": "-83.1753389",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3081032",
+"42.3091110",
+"-83.1753649",
+"-83.1753130"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175313,
+42.3081032
+],
+[
+-83.1753649,
+42.309111
+]
+]
+}
+},
+{
+"place_id": 369455676,
+"osm_type": "way",
+"osm_id": 79670995,
+"lat": "42.3009306",
+"lon": "-83.1754254",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3007750",
+"42.3010927",
+"-83.1754920",
+"-83.1753450"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175345,
+42.300775
+],
+[
+-83.175492,
+42.3010927
+]
+]
+}
+},
+{
+"place_id": 366756306,
+"osm_type": "way",
+"osm_id": 415527944,
+"lat": "42.3318309",
+"lon": "-83.1763230",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3312950",
+"42.3323669",
+"-83.1763419",
+"-83.1763040"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.176304,
+42.331295
+],
+[
+-83.1763419,
+42.3323669
+]
+]
+}
+},
+{
+"place_id": 368867755,
+"osm_type": "way",
+"osm_id": 421860848,
+"lat": "42.3022495",
+"lon": "-83.1756115",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3020282",
+"42.3024670",
+"-83.1756445",
+"-83.1755590"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1756445,
+42.3020282
+],
+[
+-83.175559,
+42.302467
+]
+]
+}
+},
+{
+"place_id": 368813287,
+"osm_type": "way",
+"osm_id": 421860850,
+"lat": "42.3017203",
+"lon": "-83.1756372",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3014150",
+"42.3020282",
+"-83.1756499",
+"-83.1755930"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175593,
+42.301415
+],
+[
+-83.1756445,
+42.3020282
+]
+]
+}
+},
+{
+"place_id": 373364448,
+"osm_type": "way",
+"osm_id": 507317703,
+"lat": "42.3012520",
+"lon": "-83.1755484",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3010927",
+"42.3014150",
+"-83.1755930",
+"-83.1754920"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175492,
+42.3010927
+],
+[
+-83.175593,
+42.301415
+]
+]
+}
+},
+{
+"place_id": 365037715,
+"osm_type": "way",
+"osm_id": 415528566,
+"lat": "42.3344572",
+"lon": "-83.1764334",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3339879",
+"42.3349267",
+"-83.1764439",
+"-83.1764138"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1764138,
+42.3339879
+],
+[
+-83.1764439,
+42.3349267
+]
+]
+}
+},
+{
+"place_id": 368258482,
+"osm_type": "way",
+"osm_id": 421862044,
+"lat": "42.3094717",
+"lon": "-83.1753758",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3091110",
+"42.3098319",
+"-83.1753984",
+"-83.1753649"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1753649,
+42.309111
+],
+[
+-83.1753984,
+42.3098319
+]
+]
+}
+},
+{
+"place_id": 367685529,
+"osm_type": "way",
+"osm_id": 421865231,
+"lat": "42.3443415",
+"lon": "-83.1768902",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3439850",
+"42.3446980",
+"-83.1769071",
+"-83.1768740"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.176874,
+42.343985
+],
+[
+-83.1769071,
+42.344698
+]
+]
+}
+},
+{
+"place_id": 368813255,
+"osm_type": "way",
+"osm_id": 507312464,
+"lat": "42.3047230",
+"lon": "-83.1751430",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 82074, United States",
+"boundingbox": [
+"42.3042840",
+"42.3051620",
+"-83.1751540",
+"-83.1751320"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175132,
+42.304284
+],
+[
+-83.175154,
+42.305162
+]
+]
+}
+},
+{
+"place_id": 367699829,
+"osm_type": "way",
+"osm_id": 507295070,
+"lat": "42.3436685",
+"lon": "-83.1768597",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3433519",
+"42.3439850",
+"-83.1768740",
+"-83.1768476"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1768476,
+42.3433519
+],
+[
+-83.176874,
+42.343985
+]
+]
+}
+},
+{
+"place_id": 368674889,
+"osm_type": "way",
+"osm_id": 507295069,
+"lat": "42.3378151",
+"lon": "-83.1765822",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3375151",
+"42.3381151",
+"-83.1765954",
+"-83.1765689"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1765689,
+42.3375151
+],
+[
+-83.1765954,
+42.3381151
+]
+]
+}
+},
+{
+"place_id": 365054341,
+"osm_type": "way",
+"osm_id": 510110941,
+"lat": "42.3104134",
+"lon": "-83.1754400",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3102348",
+"42.3105920",
+"-83.1754620",
+"-83.1754179"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1754179,
+42.3102348
+],
+[
+-83.175462,
+42.310592
+]
+]
+}
+},
+{
+"place_id": 369247482,
+"osm_type": "way",
+"osm_id": 507306403,
+"lat": "42.3158062",
+"lon": "-83.1756905",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3155753",
+"42.3160371",
+"-83.1757038",
+"-83.1756762"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1756762,
+42.3155753
+],
+[
+-83.1757038,
+42.3160371
+]
+]
+}
+},
+{
+"place_id": 366969338,
+"osm_type": "way",
+"osm_id": 499916059,
+"lat": "42.3325427",
+"lon": "-83.1763546",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3323669",
+"42.3327182",
+"-83.1763709",
+"-83.1763419"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1763419,
+42.3323669
+],
+[
+-83.1763709,
+42.3327182
+]
+]
+}
+},
+{
+"place_id": 368649106,
+"osm_type": "way",
+"osm_id": 507295067,
+"lat": "42.3383266",
+"lon": "-83.1766046",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3381151",
+"42.3385380",
+"-83.1766140",
+"-83.1765954"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1765954,
+42.3381151
+],
+[
+-83.176614,
+42.338538
+]
+]
+}
+},
+{
+"place_id": 369451856,
+"osm_type": "way",
+"osm_id": 421862048,
+"lat": "42.3100334",
+"lon": "-83.1754082",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3098319",
+"42.3102348",
+"-83.1754179",
+"-83.1753984"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1753984,
+42.3098319
+],
+[
+-83.1754179,
+42.3102348
+]
+]
+}
+},
+{
+"place_id": 368406736,
+"osm_type": "way",
+"osm_id": 421862045,
+"lat": "42.3223446",
+"lon": "-83.1759550",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, East Dearborn Downtown, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3221670",
+"42.3225222",
+"-83.1759628",
+"-83.1759470"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175947,
+42.322167
+],
+[
+-83.1759628,
+42.3225222
+]
+]
+}
+},
+{
+"place_id": 366687086,
+"osm_type": "way",
+"osm_id": 421862046,
+"lat": "42.3162204",
+"lon": "-83.1757111",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3160371",
+"42.3164036",
+"-83.1757185",
+"-83.1757038"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1757038,
+42.3160371
+],
+[
+-83.1757185,
+42.3164036
+]
+]
+}
+},
+{
+"place_id": 368954948,
+"osm_type": "way",
+"osm_id": 39800685,
+"lat": "42.3107325",
+"lon": "-83.1754705",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3105920",
+"42.3108730",
+"-83.1754790",
+"-83.1754620"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.175462,
+42.310592
+],
+[
+-83.175479,
+42.310873
+]
+]
+}
+},
+{
+"place_id": 365882025,
+"osm_type": "way",
+"osm_id": 507295062,
+"lat": "42.3338443",
+"lon": "-83.1764062",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3337007",
+"42.3339879",
+"-83.1764138",
+"-83.1763987"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1763987,
+42.3337007
+],
+[
+-83.1764138,
+42.3339879
+]
+]
+}
+},
+{
+"place_id": 365142368,
+"osm_type": "way",
+"osm_id": 507295064,
+"lat": "42.3333035",
+"lon": "-83.1763869",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3331079",
+"42.3334991",
+"-83.1763920",
+"-83.1763818"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1763818,
+42.3331079
+],
+[
+-83.176392,
+42.3334991
+]
+]
+}
+},
+{
+"place_id": 364925228,
+"osm_type": "way",
+"osm_id": 727730049,
+"lat": "42.3276875",
+"lon": "-83.1761583",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3276147",
+"42.3277604",
+"-83.1761604",
+"-83.1761562"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1761562,
+42.3276147
+],
+[
+-83.1761604,
+42.3277604
+]
+]
+}
+},
+{
+"place_id": 428857053,
+"osm_type": "way",
+"osm_id": 1561050832,
+"lat": "42.3164468",
+"lon": "-83.1757202",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3164036",
+"42.3164900",
+"-83.1757220",
+"-83.1757185"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1757185,
+42.3164036
+],
+[
+-83.175722,
+42.31649
+]
+]
+}
+},
+{
+"place_id": 364925068,
+"osm_type": "way",
+"osm_id": 507302037,
+"lat": "42.3279032",
+"lon": "-83.1761689",
+"category": "highway",
+"type": "secondary",
+"name": "Schaefer Road",
+"display_name": "Schaefer Road, Dearborn, Wayne County, Michigan, 48126, United States",
+"boundingbox": [
+"42.3278687",
+"42.3279377",
+"-83.1761702",
+"-83.1761675"
+],
+"geojson": {
+"type": "LineString",
+"coordinates": [
+[
+-83.1761675,
+42.3278687
+],
+[
+-83.1761702,
+42.3279377
+]
+]
+}
+}
+]

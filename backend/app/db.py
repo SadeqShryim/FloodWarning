@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
-from .util import ms_to_iso, utc_now_iso
+from .util import ms_to_iso
 
 log = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ def _now_ms() -> int:
 
 
 def _write_stamp() -> str:
-    """updated_at for an update: milliseconds, and strictly later than any earlier update.
+    """A timestamp for a write: milliseconds, and strictly later than any earlier one handed out.
 
     Dashboards keep the newest copy of a report by comparing updated_at, and a live event and an
     HTTP response can arrive in either order. Second precision cannot order a "pending" write and
@@ -281,12 +281,13 @@ def close() -> None:
 def insert_report(row: dict) -> dict:
     """Insert a row dict (no id needed; unknown keys ignored) and return the stored row dict."""
     values = normalize_row(row)
-    now = utc_now_iso()
-    values["created_at"] = values["created_at"] or now
-    values["updated_at"] = values["updated_at"] or values["created_at"]
     names = COLUMN_NAMES  # never insert an explicit id: AUTOINCREMENT owns it
     placeholders = ", ".join("?" for _ in names)
     with _lock:
+        # Milliseconds, strictly increasing: storm mode and a busy demo insert several reports a
+        # second, and the dashboard breaks ties between equally urgent reports by created_at.
+        values["created_at"] = values["created_at"] or _write_stamp()
+        values["updated_at"] = values["updated_at"] or values["created_at"]
         conn = _connection()
         cursor = conn.execute(
             f"INSERT INTO reports ({', '.join(names)}) VALUES ({placeholders})",

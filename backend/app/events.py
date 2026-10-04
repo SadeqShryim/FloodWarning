@@ -2,8 +2,11 @@
 
 Each SSE connection subscribes one asyncio.Queue; publish() fans an event out to all of them
 without ever waiting. A dashboard that stops reading (a stalled tab, a tunnel that buffers)
-gets its events dropped once its queue is full instead of slowing everyone else down; the
-dashboard re-fetches a full snapshot whenever it reconnects, so a dropped event is not lost data.
+must not slow everyone else down, but silently dropping its events would leave it showing stale
+pins (a report stuck at "processing..."). So when its queue overflows, the subscriber is cut off:
+its backlog is thrown away and replaced by one RESYNC marker, which ends that SSE stream. The
+browser's EventSource reconnects on its own, and the dashboard loads a full snapshot on every
+(re)connect, so nothing is lost and the log gets one line instead of one per dropped event.
 """
 from __future__ import annotations
 
@@ -12,7 +15,11 @@ import logging
 
 log = logging.getLogger(__name__)
 
-QUEUE_SIZE = 200  # per subscriber; storm mode produces ~1 event/s, so this is minutes of slack
+QUEUE_SIZE = 200  # per subscriber; a fast storm makes ~5 events/s, so this is ~40 s of slack
+
+# Put in a cut-off subscriber's queue instead of further events: "stop streaming, let the client
+# reconnect". Internal only; the SSE endpoint never sends it.
+RESYNC: dict = {"type": "_resync"}
 
 
 class Broker:
@@ -52,12 +59,19 @@ class Broker:
                 except RuntimeError:
                     self._subscribers.pop(queue, None)
 
-    @staticmethod
-    def _offer(queue: asyncio.Queue, event: dict) -> None:
+    def _offer(self, queue: asyncio.Queue, event: dict) -> None:
+        if queue not in self._subscribers:
+            return  # unsubscribed (or cut off) after this event was scheduled for it
         try:
             queue.put_nowait(event)
         except asyncio.QueueFull:
-            log.warning("SSE subscriber is not keeping up; dropped a %s event", event.get("type"))
+            # Too far behind to catch up event by event: cut it off and make it reload instead.
+            self._subscribers.pop(queue, None)
+            while not queue.empty():
+                queue.get_nowait()
+            queue.put_nowait(RESYNC)
+            log.warning("a live dashboard fell %d events behind; ending its stream so it reconnects and reloads",
+                        self._queue_size)
 
 
 broker = Broker()

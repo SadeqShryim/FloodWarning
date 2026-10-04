@@ -70,6 +70,20 @@ if (Test-Path .env) {
     Copy-Item .env.example .env
 }
 
+# Windows' default execution policy ("Restricted") refuses to run .\run.ps1 directly. This script
+# was started with -ExecutionPolicy Bypass, so look at the policy a new window will have instead.
+$policy = 'Restricted'
+foreach ($scope in 'MachinePolicy', 'UserPolicy', 'CurrentUser', 'LocalMachine') {
+    $value = Get-ExecutionPolicy -Scope $scope
+    if ($value -ne 'Undefined') { $policy = $value; break }
+}
+if ($policy -in 'Restricted', 'AllSigned') {
+    $start = 'powershell -ExecutionPolicy Bypass -File .\run.ps1 --open'
+} else {
+    $start = '.\run.ps1 --open'
+}
+
 Write-Host "`nSetup done." -ForegroundColor Green
 Write-Host '  Optional: put your Gemini key in .env (GEMINI_API_KEY=...). Without it, a keyword fallback is used.'
-Write-Host '  Start the demo:  .\run.ps1 --open'
+Write-Host "  Start the demo:  $start"
+Write-Host '             (or:  .venv\Scripts\python.exe run.py --open)'

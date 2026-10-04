@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Stre
 from pydantic import BaseModel, Field
 
 from . import ai, briefing, config, db, service, storm
-from .events import broker
+from .events import RESYNC, broker
 from .models import Briefing, PublicUrlUpdate, StatusUpdate
 from .util import utc_now_iso
 
@@ -321,16 +321,44 @@ async def _read_limited(upload: UploadFile | None, limit: int, what: str) -> byt
     return data or None
 
 
-def _file_type(upload: UploadFile, kind: str) -> tuple[str, str]:
-    """(extension, MIME type) for an upload, trusting the filename's extension over a vague content type."""
+# Leading bytes of the formats phones and browsers record or photograph in.
+_MAGIC: list[tuple[int, bytes, str]] = [
+    (0, b"RIFF", ".wav"),  # checked together with "WAVE" below
+    (0, b"OggS", ".ogg"),
+    (0, b"\x1a\x45\xdf\xa3", ".webm"),  # Matroska / WebM
+    (4, b"ftyp", ".m4a"),  # MP4 / M4A family
+    (0, b"ID3", ".mp3"),
+    (0, b"fLaC", ".flac"),
+    (0, b"\xff\xd8\xff", ".jpg"),
+    (0, b"\x89PNG", ".png"),
+]
+
+
+def _sniff(data: bytes, kind: str) -> str | None:
+    """Extension guessed from the file's first bytes, or None."""
+    for offset, magic, suffix in _MAGIC:
+        if data[offset:offset + len(magic)] == magic:
+            if suffix == ".wav" and data[8:12] != b"WAVE":
+                continue
+            return suffix if service.EXT_TO_MIME[suffix].startswith(f"{kind}/") else None
+    if kind == "audio" and len(data) > 1 and data[0] == 0xFF and data[1] & 0xE0 == 0xE0:
+        return ".mp3"  # bare MPEG audio frame
+    return None
+
+
+def _file_type(upload: UploadFile, kind: str, data: bytes = b"") -> tuple[str, str]:
+    """(extension, MIME type) for an upload: the filename's extension, else the content type, else
+    the file's own leading bytes. The MIME type is stored in its canonical form so playback works."""
     mime = (upload.content_type or "").split(";")[0].strip().lower()
     if kind == "audio":
         mime = AUDIO_MIME_ALIASES.get(mime, mime)
     suffix = Path(upload.filename or "").suffix.lower()
     if suffix not in service.EXT_TO_MIME:
-        suffix = service.MIME_TO_EXT.get(mime, ".bin")
+        suffix = service.MIME_TO_EXT.get(mime) or _sniff(data, kind) or ".bin"
     if not mime or mime == "application/octet-stream" or not mime.startswith(f"{kind}/"):
         mime = service.EXT_TO_MIME.get(suffix, mime or "application/octet-stream")
+    if mime in service.MIME_TO_EXT:  # aliases like audio/x-wav, audio/x-m4a, image/jpg
+        mime = service.EXT_TO_MIME[service.MIME_TO_EXT[mime]]
     return suffix, mime
 
 
@@ -400,22 +428,22 @@ async def create_report(
         "is_simulated": False,
     }
     if audio_bytes and audio is not None:
-        suffix, mime = _file_type(audio, "audio")
+        suffix, mime = _file_type(audio, "audio", audio_bytes)
         row["audio_path"], row["audio_mime"] = _save_upload(audio_bytes, suffix), mime
     if photo_bytes and photo is not None:
-        suffix, mime = _file_type(photo, "image")
+        suffix, mime = _file_type(photo, "image", photo_bytes)
         row["photo_path"], row["photo_mime"] = _save_upload(photo_bytes, suffix), mime
 
     stored = await service.add_report(row)
     report_id = stored["id"]
     task = start_enrichment(report_id)
-    try:
-        # shield: if we stop waiting (or the phone hangs up), the AI step keeps going
-        await asyncio.wait_for(asyncio.shield(task), timeout=config.POST_WAIT_S)
-    except asyncio.TimeoutError:
+    # asyncio.wait neither cancels the AI step when we stop waiting nor raises when that step is
+    # cancelled (a demo reset does that): either way the phone still gets a normal answer.
+    done, _ = await asyncio.wait({task}, timeout=config.POST_WAIT_S)
+    if not done:
         log.info("report %s: answering while the AI step is still running", report_id)
-    except Exception:
-        log.exception("report %s: enrichment task failed", report_id)
+    elif task.cancelled():
+        log.info("report %s: the AI step was cancelled (demo reset?); answering with the saved report", report_id)
     return service.to_api(db.get_report(report_id) or stored)
 
 
@@ -485,6 +513,11 @@ async def events() -> StreamingResponse:
                         yield ": ping\n\n"
                         last_sent = time.monotonic()
                     continue
+                if event is RESYNC:
+                    # This dashboard fell too far behind (see events.py). Ending the stream makes
+                    # EventSource reconnect (after 1 s), and the new "hello" reloads everything.
+                    yield "retry: 1000\n\n"
+                    break
                 yield _sse(event)
                 last_sent = time.monotonic()
         finally:
