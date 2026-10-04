@@ -114,10 +114,10 @@ cd backend; ..\.venv\Scripts\python.exe -m pytest -q   # tests (no network, Gemi
 Gemini is used three ways, all tied to the map:
 
 1. **Voice note → ranked pin.** One Gemini call gets the audio (plus the photo and any typed text) and returns structured JSON: a verbatim transcript in the original script, a faithful English translation, a one-line summary for responders, a calm confirmation in the reporter's language, the water depth in cm (it converts "knee-deep" or "two feet"), the location type, whether the water is rising, people at risk (elderly, children, disabled, medical, trapped, count), hazards (electrical, sewage, gas, structural), and needs. The prompt knows about Dearborn's large Arabic-speaking community (Lebanese, Yemeni and Iraqi dialects) and about mixed-language speech.
-2. **A place you *say* → a pin.** If the phone has no GPS fix, the place the reporter mentions ("we're at Warren and Schaefer") goes to OpenStreetMap's Nominatim, with an Overpass lookup for street intersections, and the report lands on the map anyway.
+2. **A place you *say* → a pin.** If the phone has no GPS fix, the place the reporter mentions ("we're at Warren and Schaefer") goes to OpenStreetMap's Nominatim (a street intersection is found where the two streets' geometry meets, with the Overpass API as a backup), and the report lands on the map anyway.
 3. **AI Sitrep.** Open reports are clustered into hotspots (deterministic: reports within 700 m, starting from the most urgent), drawn as circles on the map. Gemini writes a 3-5 sentence briefing for the incident commander: what is worst, where it clusters, and what to send first.
 
-Thinking is turned off for speed (newer Flash models, where it cannot be switched off, get the minimal setting), and the call has a hard timeout. If `gemini-2.5-flash` is unavailable or rate-limited, FloodLine tries the fallback models in order (`GEMINI_FALLBACK_MODELS`).
+Thinking is turned off for speed (newer Flash models, where it cannot be switched off, get their fastest setting), and the call has a hard timeout. With a key, the server makes one tiny warm-up call at startup, so the first real report does not pay for connecting. If `gemini-2.5-flash` is unavailable or rate-limited, FloodLine tries the fallback models in order (`GEMINI_FALLBACK_MODELS`), and the dashboard header shows which model is answering.
 
 ### Never lose a report
 
@@ -181,6 +181,7 @@ Settings come from environment variables or a `.env` file in the repo root (copy
 | `FLOODLINE_SEED` | `1` | Load the 25 demo reports when the database is empty |
 | `FLOODLINE_AI_TIMEOUT` | `15` | Seconds before the AI step gives up (the report is kept) |
 | `FLOODLINE_POST_WAIT` | `9` | Seconds the phone waits for the AI before showing "Understanding your report..." |
+| `FLOODLINE_AI_WARMUP` | `1` | With a key, one tiny Gemini call at startup so the first report is fast (`0` turns it off) |
 | `NOMINATIM_URL` | `https://nominatim.openstreetmap.org` | Geocoder |
 | `NOMINATIM_USER_AGENT` | `FloodLine/0.1 (...)` | Identifies the app to OpenStreetMap, as their usage policy asks |
 
@@ -202,7 +203,9 @@ Geocoding follows the Nominatim usage policy: at most one request per second, an
 
 **"running scripts is disabled on this system".** That is Windows' default PowerShell policy. Use `powershell -ExecutionPolicy Bypass -File .\run.ps1 --open`, or `.venv\Scripts\python.exe run.py --open`, which needs no PowerShell script at all.
 
-**Gemini quota / errors.** The free tier has per-minute and per-day request limits. When a model answers 429 (quota), 403/404 or 5xx, FloodLine moves to the next model in `GEMINI_FALLBACK_MODELS`. Google can restrict older models for brand-new keys; if `gemini-2.5-flash` answers 403/404, the list falls through to `gemini-flash-latest`. If all fail, the report is kept, marked **needs review**, and still ranked (keyword fallback for typed text). The banner and `/api/health` show whether AI is on and which model answered last. Use **Retry AI** on a report once the quota resets.
+**Gemini quota / errors.** The free tier has per-minute and per-day request limits. When a model answers 429 (quota), 403/404 or 5xx, FloodLine moves to the next model in `GEMINI_FALLBACK_MODELS`. Google can restrict older models for brand-new keys; if `gemini-2.5-flash` answers 403/404, the list falls through to `gemini-flash-latest`. If all fail, the report is kept, marked **needs review**, and still ranked (keyword fallback for typed text). The banner, the dashboard header and `/api/health` show whether AI is on and which model answered last. Use **Retry AI** on a report once the quota resets.
+
+**Check a new Gemini key before the demo.** Run `.venv\Scripts\python.exe backend\scripts\live_ai_check.py --max-calls 1`: one real call with the Arabic test voice note, which must come back CRITICAL with an Arabic confirmation. It prints which model answered and how fast. Without `--max-calls` it makes 4 calls (three voice notes and a sitrep). Google limits the 2.5 models to projects that used them before; for a brand-new key you can put a newer, fast model in the list, for example `GEMINI_FALLBACK_MODELS=gemini-2.5-flash-lite,gemini-flash-latest,gemini-3.5-flash-lite` in `.env`.
 
 **"Port 8000 is already in use".** Another FloodLine (or another server) is running. Close it, or use `.\run.ps1 --port 8010`.
 

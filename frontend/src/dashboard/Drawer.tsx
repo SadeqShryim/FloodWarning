@@ -195,10 +195,10 @@ export default function Drawer({ report, now, onClose, onUpdated, onStep }: Draw
 
         <section className="fl-sec">
           <h3>
-            What they said <span className="fl-sec-note">{languageLabel(lang)}</span>
+            What they said {lang && <span className="fl-sec-note">{languageLabel(lang)}</span>}
           </h3>
           {report.transcript_original ? (
-            <p className={`fl-transcript is-original${lang === 'ar' ? ' is-arabic' : ''}`} dir="auto" lang={lang}>
+            <p className={`fl-transcript is-original${lang === 'ar' ? ' is-arabic' : ''}`} dir="auto" lang={lang ?? undefined}>
               {report.transcript_original}
             </p>
           ) : (

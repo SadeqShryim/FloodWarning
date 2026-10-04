@@ -33,7 +33,7 @@ export interface Needs {
 
 export interface Report {
   id: number
-  created_at: string // ISO 8601, UTC
+  created_at: string // ISO 8601, UTC; live reports carry milliseconds (seeds: whole seconds)
   updated_at: string // ISO 8601, UTC; milliseconds after an update, strictly increasing (orders versions)
   lat: number | null
   lng: number | null

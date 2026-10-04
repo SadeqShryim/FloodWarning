@@ -66,10 +66,12 @@ const Card = memo(function Card({ report, selected, flash, now, onSelect }: Card
                 {report.urgency_score != null && <span className="fl-level-score">{report.urgency_score}</span>}
               </span>
             )}
-            <span className="fl-lang" title={`Reported in ${languageLabel(lang)}`}>
-              {languageLabel(lang)}
-              {lang !== 'en' && <span className="fl-lang-tr">translated</span>}
-            </span>
+            {lang && (
+              <span className="fl-lang" title={`Reported in ${languageLabel(lang)}`}>
+                {languageLabel(lang)}
+                {lang !== 'en' && <span className="fl-lang-tr">translated</span>}
+              </span>
+            )}
             <span className="fl-card-time">{relativeTime(report.created_at, now)}</span>
           </span>
 

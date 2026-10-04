@@ -63,7 +63,7 @@ class Report(BaseModel):
     """A report as the API returns it."""
 
     id: int
-    created_at: str  # ISO 8601, UTC, e.g. "2026-10-04T15:04:05Z"
+    created_at: str  # ISO 8601, UTC, e.g. "2026-10-04T15:04:05Z" (seeds); live reports carry milliseconds
     updated_at: str  # same, with milliseconds after an update ("...05.123Z"); strictly increasing per write
     lat: Optional[float] = None
     lng: Optional[float] = None
