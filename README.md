@@ -14,7 +14,7 @@ Built at Hack Dearborn 2026 (track: *Shaping Society*, theme: *Conjure Reality*)
 
 1. **Scan.** The dashboard shows a QR code. A judge scans it with their phone, which opens the reporting page (no install, no login). They tap **RECORD**, speak (try Arabic: *"الميّ عم تفوت عالبيت وجدّي ما فيه يطلع الدرج"*), and tap **SEND**.
 2. **Pin drops.** About 5 seconds later a pin appears on the dashboard map, ranked **CRITICAL**, with the English translation, the original transcript, the water depth and who is at risk. The phone shows a confirmation in the reporter's own language.
-3. **The queue.** About 25 reports across Dearborn (East Dearborn, Southend, Ford Woods, the Southfield Freeway underpasses...) are ranked by urgency. Click one to see the details and play the voice note, then mark it **Dispatched**.
+3. **The queue.** 25 demo reports across Dearborn (the Warren Avenue corridor in East Dearborn, the Southend, Fordson, West Dearborn, the Southfield Freeway service drive...) are ranked by urgency. Click one to see the details and play the voice note, then mark it **Dispatched**.
 4. **Storm mode.** Press *Storm mode*: new reports pour in live, each one processed and ranked as it lands, and the queue reshuffles in front of you. Press *AI Sitrep* for a briefing for the incident commander, with hotspot circles drawn on the map.
 5. **Close.** "No app to download. Any language. Grandma can do this."
 
@@ -112,7 +112,7 @@ Gemini is used three ways, all tied to the map:
 2. **A place you *say* → a pin.** If the phone has no GPS fix, the place the reporter mentions ("we're at Warren and Schaefer") goes to OpenStreetMap's Nominatim, with an Overpass lookup for street intersections, and the report lands on the map anyway.
 3. **AI Sitrep.** Open reports are clustered into hotspots (deterministic: reports within 700 m, starting from the most urgent), drawn as circles on the map. Gemini writes a 3-5 sentence briefing for the incident commander: what is worst, where it clusters, and what to send first.
 
-Thinking is turned off for speed, and the call has a hard timeout. If `gemini-2.5-flash` is unavailable or rate-limited, FloodLine tries the fallback models in order (`GEMINI_FALLBACK_MODELS`).
+Thinking is turned off for speed (newer Flash models, where it cannot be switched off, get the minimal setting), and the call has a hard timeout. If `gemini-2.5-flash` is unavailable or rate-limited, FloodLine tries the fallback models in order (`GEMINI_FALLBACK_MODELS`).
 
 ### Never lose a report
 
@@ -195,7 +195,7 @@ Geocoding follows the Nominatim usage policy: at most one request per second, an
 
 **The dashboard says "polling" instead of "live".** Live updates use Server-Sent Events. Some proxies (including tunnels) buffer them, so the dashboard falls back to refreshing every 3 seconds. Use the dashboard on the laptop (`http://localhost:8000/dashboard`) for instant updates. Phones only need the report page.
 
-**Gemini quota / errors.** The free tier has per-minute and per-day request limits. When a model answers 429 (quota), 404 or 5xx, FloodLine moves to the next model in `GEMINI_FALLBACK_MODELS`. If all fail, the report is kept, marked **needs review**, and still ranked (keyword fallback for typed text). The banner and `/api/health` show whether AI is on and which model answered last. Use **Retry AI** on a report once the quota resets.
+**Gemini quota / errors.** The free tier has per-minute and per-day request limits. When a model answers 429 (quota), 403/404 or 5xx, FloodLine moves to the next model in `GEMINI_FALLBACK_MODELS`. Google can restrict older models for brand-new keys; if `gemini-2.5-flash` answers 403/404, the list falls through to `gemini-flash-latest`. If all fail, the report is kept, marked **needs review**, and still ranked (keyword fallback for typed text). The banner and `/api/health` show whether AI is on and which model answered last. Use **Retry AI** on a report once the quota resets.
 
 **"Port 8000 is already in use".** Another FloodLine (or another server) is running. Close it, or use `.\run.ps1 --port 8010`.
 
