@@ -2,7 +2,7 @@
 // record -> stop -> send -> "report received". Typing is always available as a fallback.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
-import { ApiError, api, createReport } from '../api'
+import { ApiError, api } from '../api'
 import type { Report, UiLanguage } from '../types'
 import { initialLanguage, isRtl, LANGUAGES, saveLanguage, STRINGS } from './i18n'
 import type { Strings } from './i18n'
@@ -22,12 +22,13 @@ import { requestLocation } from './location'
 import type { Fix, LocationFailure } from './location'
 import { preparePhoto } from './photo'
 import { classifyMicError, micUnavailableReason, WavRecorder } from './recorder'
-import type { MicErrorCode } from './recorder'
+import type { AutoStopReason, MicErrorCode } from './recorder'
+import { uploadReport, UploadError } from './upload'
 import './report.css'
 
 type Screen = 'idle' | 'recording' | 'review' | 'typing' | 'sending' | 'done'
-type MicProblem = MicErrorCode | 'empty'
-type SendProblem = 'network' | 'timeout' | 'server' | 'tooLarge' | 'missing' | 'textEmpty'
+type MicProblem = MicErrorCode | 'empty' | 'interrupted' | 'interruptedKept'
+type SendProblem = 'network' | 'offline' | 'timeout' | 'stopped' | 'server' | 'tooLarge' | 'missing' | 'textEmpty'
 type LocState = { kind: 'locating' } | { kind: 'found'; fix: Fix } | { kind: 'failed'; reason: LocationFailure }
 
 interface Recording {
@@ -43,9 +44,12 @@ interface Photo {
 }
 
 const MAX_SECONDS = 60
-const SEND_TIMEOUT_MS = 45000
+const SEND_TIMEOUT_MS = 45000 // give up when the upload has not moved for this long
+const SLOW_AFTER_MS = 12000 // then say the connection is slow and offer to stop
 const POLL_EVERY_MS = 1500
 const POLL_FOR_MS = 20000
+// A second tap on the big button this soon after the first is a double tap, not a decision to stop.
+const DOUBLE_TAP_MS = 700
 
 function formatClock(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds))
@@ -67,6 +71,10 @@ function micMessage(t: Strings, problem: MicProblem): string {
       return t.micBusy
     case 'empty':
       return t.micEmpty
+    case 'interrupted':
+      return t.micInterrupted
+    case 'interruptedKept':
+      return t.micInterruptedKept
     default:
       return t.micFailed
   }
@@ -84,19 +92,29 @@ function sendMessage(t: Strings, problem: SendProblem): string {
       return t.errMissing
     case 'textEmpty':
       return t.textEmpty
+    case 'offline':
+      return t.errOffline
+    case 'stopped':
+      return t.errStopped
     default:
       return t.errNetwork
   }
 }
 
-function classifySendError(err: unknown, timedOut: boolean): SendProblem {
-  if (timedOut) return 'timeout'
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false
+
+function classifySendError(err: unknown): SendProblem {
+  if (err instanceof UploadError) {
+    if (err.reason === 'timeout') return 'timeout'
+    if (err.reason === 'aborted') return 'stopped'
+    return isOffline() ? 'offline' : 'network'
+  }
   if (err instanceof ApiError) {
     if (err.status === 413) return 'tooLarge'
     if (err.status === 422) return 'missing'
     return 'server'
   }
-  return 'network' // fetch rejects with a TypeError when the phone is offline or the tunnel drops
+  return isOffline() ? 'offline' : 'network'
 }
 
 /** The few facts we read back to the reporter so they know they were understood. */
@@ -135,7 +153,11 @@ export default function ReportPage() {
   const [photoBusy, setPhotoBusy] = useState(false)
   const [loc, setLoc] = useState<LocState>({ kind: 'locating' })
   const [address, setAddress] = useState('')
+  const [addressOpen, setAddressOpen] = useState(false)
   const [sendProblem, setSendProblem] = useState<SendProblem | null>(null)
+  const [progress, setProgress] = useState(0)
+  const [slow, setSlow] = useState(false)
+  const [online, setOnline] = useState(() => !isOffline())
   const [report, setReport] = useState<Report | null>(null)
   const [pollGaveUp, setPollGaveUp] = useState(false)
   const [announcement, setAnnouncement] = useState('')
@@ -151,6 +173,9 @@ export default function ReportPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const detailsRef = useRef<HTMLTextAreaElement | null>(null)
+  const addressRef = useRef<HTMLInputElement | null>(null)
+  const lastBigTap = useRef(0)
+  const sendingRef = useRef(false) // a second Send tap before the screen changes must not post twice
   // Object URLs live in refs too, so the unmount cleanup can revoke the latest ones.
   const recordingUrlRef = useRef<string | null>(null)
   const photoUrlRef = useRef<string | null>(null)
@@ -219,6 +244,17 @@ export default function ReportPage() {
     }
   }, [requestFix])
 
+  // Tell the reporter as soon as the phone loses its connection, before they try to send.
+  useEffect(() => {
+    const update = () => setOnline(!isOffline())
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
+  }, [])
+
   // Move focus to the new screen's heading so screen readers (and keyboard users) start there.
   // While recording, focus stays on the big button, which has become the Stop button.
   useEffect(() => {
@@ -238,13 +274,14 @@ export default function ReportPage() {
 
   // ---- recording -------------------------------------------------------------------------
 
-  const keepRecording = (blob: Blob, seconds: number) => {
+  const keepRecording = (blob: Blob, seconds: number, reason?: AutoStopReason) => {
     stopTick()
     recorderRef.current = null
     setMicReady(false)
     setLevel(0)
+    const interrupted = reason === 'interrupted'
     if (seconds < 0.6 || blob.size <= 44) {
-      setMicProblem('empty')
+      setMicProblem(interrupted ? 'interrupted' : 'empty')
       setScreen(recordingUrlRef.current ? 'review' : 'idle')
       return
     }
@@ -253,6 +290,7 @@ export default function ReportPage() {
     recordingUrlRef.current = url
     setRecording({ blob, url, seconds })
     setPlaying(false)
+    setMicProblem(interrupted ? 'interruptedKept' : null)
     setScreen('review')
     announce(t.annStopped(t.seconds(Math.round(seconds))))
   }
@@ -268,8 +306,8 @@ export default function ReportPage() {
     const rec = new WavRecorder({
       maxSeconds: MAX_SECONDS,
       onLevel: setLevel,
-      onAutoStop: (wav, seconds) => {
-        if (recorderRef.current === rec && mountedRef.current) keepRecording(wav, seconds)
+      onAutoStop: (wav, seconds, reason) => {
+        if (recorderRef.current === rec && mountedRef.current) keepRecording(wav, seconds, reason)
       },
     })
     recorderRef.current = rec
@@ -303,6 +341,16 @@ export default function ReportPage() {
     void rec.stop().then((wav) => {
       if (mountedRef.current) keepRecording(wav, seconds)
     })
+  }
+
+  // The big button is RECORD and then STOP in the same spot, so a nervous double tap would start
+  // and immediately cancel. Ignore the second tap of a double tap; a deliberate Stop comes later.
+  const onBigButton = () => {
+    const now = Date.now()
+    if (now - lastBigTap.current < DOUBLE_TAP_MS) return
+    lastBigTap.current = now
+    if (screen === 'recording') stopRecording()
+    else startRecording()
   }
 
   const cancelRecording = () => {
@@ -377,28 +425,37 @@ export default function ReportPage() {
   }
 
   const send = async () => {
+    if (sendingRef.current) return
     const typed = text.trim()
     const backTo: Screen = screen === 'typing' ? 'typing' : 'review'
     if (!recording && !typed) {
       setSendProblem(screen === 'typing' ? 'textEmpty' : 'missing')
       return
     }
+    // No point waiting for a request that cannot leave the phone.
+    if (isOffline()) {
+      setOnline(false)
+      setSendProblem('offline')
+      headingRef.current?.focus()
+      return
+    }
+    sendingRef.current = true
     audioRef.current?.pause()
     setSendProblem(null)
+    setProgress(0)
+    setSlow(false)
     setScreen('sending')
     announce(t.annSending)
 
     const controller = new AbortController()
     abortRef.current = controller
-    let timedOut = false
-    const timer = window.setTimeout(() => {
-      timedOut = true
-      controller.abort()
-    }, SEND_TIMEOUT_MS)
+    const slowTimer = window.setTimeout(() => {
+      if (mountedRef.current) setSlow(true)
+    }, SLOW_AFTER_MS)
     const fix = loc.kind === 'found' ? loc.fix : null
 
     try {
-      const saved = await createReport(
+      const saved = await uploadReport(
         {
           audio: recording ? recording.blob : null,
           audioFilename: 'voice-note.wav',
@@ -411,7 +468,13 @@ export default function ReportPage() {
           addressText: address.trim() || undefined,
           uiLanguage: lang,
         },
-        controller.signal,
+        {
+          signal: controller.signal,
+          stallTimeoutMs: SEND_TIMEOUT_MS,
+          onProgress: (fraction) => {
+            if (mountedRef.current) setProgress(fraction)
+          },
+        },
       )
       if (!mountedRef.current) return
       setReport(saved)
@@ -423,12 +486,18 @@ export default function ReportPage() {
       // Aborted because the page is closing: nothing to show.
       if (!mountedRef.current || abortRef.current !== controller) return
       // Everything the reporter made (recording, text, photo) is still in state for "Try again".
-      setSendProblem(classifySendError(err, timedOut))
+      setSendProblem(classifySendError(err))
       setScreen(backTo)
     } finally {
-      window.clearTimeout(timer)
+      window.clearTimeout(slowTimer)
       if (abortRef.current === controller) abortRef.current = null
+      sendingRef.current = false
     }
+  }
+
+  // "Stop sending" on a stuck connection: back to the review screen with everything kept.
+  const stopSending = () => {
+    abortRef.current?.abort() // send() catches it and shows "Sending stopped"
   }
 
   const startOver = () => {
@@ -480,27 +549,43 @@ export default function ReportPage() {
     </div>
   )
 
-  // The first screen shows only the status line (RECORD is the one action there); the address
-  // field appears on the review and typing screens, right before sending.
-  const renderLocation = (withAddress: boolean) => (
-    <div className="fl-r-loc">
-      {loc.kind === 'locating' && (
-        <p className="fl-r-locline">
-          <span className="fl-r-dot is-busy" aria-hidden="true" />
-          {t.locating}
-        </p>
-      )}
-      {loc.kind === 'found' && (
-        <p className="fl-r-locline is-ok">
-          <PinIcon size={22} className="fl-r-locicon" />
-          <span>{t.locFound(Math.max(1, Math.round(loc.fix.accuracy)))}</span>
-        </p>
-      )}
-      {loc.kind === 'failed' && (
-        <>
+  const openAddress = () => {
+    setAddressOpen(true)
+    window.setTimeout(() => addressRef.current?.focus(), 0)
+  }
+
+  // The status line is on every screen. The address field opens by itself on the review and
+  // typing screens once GPS has failed (`autoAddress`); before that, or when GPS looks wrong,
+  // "Add an address" opens it on any screen without waiting for the location attempt to finish.
+  const renderLocation = (autoAddress: boolean) => {
+    const showField = addressOpen || address.trim() !== '' || (autoAddress && loc.kind === 'failed')
+    const addLink = !showField && (
+      <button type="button" className="fl-r-inline fl-r-addaddr" onClick={openAddress}>
+        {t.addAddress}
+      </button>
+    )
+    return (
+      <div className="fl-r-loc">
+        {loc.kind === 'locating' && (
+          <p className="fl-r-locline">
+            <span className="fl-r-dot is-busy" aria-hidden="true" />
+            <span className="fl-r-locmsg">{t.locating}</span>
+            {addLink}
+          </p>
+        )}
+        {loc.kind === 'found' && (
+          <p className="fl-r-locline">
+            <span className="fl-r-locmsg is-ok">
+              <PinIcon size={22} className="fl-r-locicon" />
+              {t.locFound(Math.max(1, Math.round(loc.fix.accuracy)))}
+            </span>
+            {addLink}
+          </p>
+        )}
+        {loc.kind === 'failed' && (
           <p className="fl-r-locline is-off">
-            <PinIcon size={22} className="fl-r-locicon" />
-            <span>
+            <span className="fl-r-locmsg">
+              <PinIcon size={22} className="fl-r-locicon" />
               {loc.reason === 'denied' ? t.locDenied : loc.reason === 'insecure' ? t.locInsecure : t.locUnavailable}
             </span>
             {loc.reason !== 'insecure' && loc.reason !== 'unsupported' && (
@@ -508,29 +593,31 @@ export default function ReportPage() {
                 {t.locRetry}
               </button>
             )}
+            {addLink}
           </p>
-          {withAddress && (
-            <>
-              <label className="fl-r-label" htmlFor="fl-r-address">
-                {t.addressLabel}
-              </label>
-              <input
-                id="fl-r-address"
-                className="fl-r-input"
-                type="text"
-                dir="auto"
-                autoComplete="street-address"
-                value={address}
-                placeholder={t.addressPlaceholder}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-              <p className="fl-r-hint">{t.addressHint}</p>
-            </>
-          )}
-        </>
-      )}
-    </div>
-  )
+        )}
+        {showField && (
+          <div className="fl-r-field fl-r-addr">
+            <label className="fl-r-label" htmlFor="fl-r-address">
+              {t.addressLabel}
+            </label>
+            <input
+              id="fl-r-address"
+              ref={addressRef}
+              className="fl-r-input"
+              type="text"
+              dir="auto"
+              autoComplete="street-address"
+              value={address}
+              placeholder={t.addressPlaceholder}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            <p className="fl-r-hint">{t.addressHint}</p>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const photoBlock = (
     <div className="fl-r-photo">
@@ -616,7 +703,7 @@ export default function ReportPage() {
                 type="button"
                 className="fl-r-big"
                 aria-label={isRec ? t.stopAria : t.recordAria}
-                onClick={isRec ? stopRecording : startRecording}
+                onClick={onBigButton}
               >
                 <span className="fl-r-water" style={{ height: isRec ? `${fill}%` : '0%' }} aria-hidden="true" />
                 <span className="fl-r-bigface">
@@ -680,6 +767,11 @@ export default function ReportPage() {
         </h1>
         <p className="fl-r-lead">{t.reviewLead}</p>
         {sendError}
+        {micProblem === 'interruptedKept' && !sendProblem && (
+          <div className="fl-r-note" role="status">
+            {micMessage(t, micProblem)}
+          </div>
+        )}
 
         {recording && (
           <div className="fl-r-player">
@@ -713,7 +805,7 @@ export default function ReportPage() {
           {t.recordAgain}
         </button>
 
-        {micProblem && (
+        {micProblem && micProblem !== 'interruptedKept' && (
           <div className="fl-r-alert" role="alert">
             {micMessage(t, micProblem)}
           </div>
@@ -803,6 +895,21 @@ export default function ReportPage() {
           {t.sending}
         </h1>
         <p className="fl-r-lead">{t.sendingLead}</p>
+        {/* Real upload progress: on a weak signal a long voice note takes a while to go up. */}
+        <div className="fl-r-progress" aria-hidden="true">
+          <span className="fl-r-progressbar" style={{ width: `${Math.round(Math.max(0.04, progress) * 100)}%` }} />
+        </div>
+        <p className="fl-r-progresstext">
+          {progress >= 1 ? t.sendingAlmost : t.sendingProgress(Math.round(progress * 100))}
+        </p>
+        {slow && (
+          <>
+            <p className="fl-r-hint">{t.sendingSlow}</p>
+            <button type="button" className="fl-r-textbtn" onClick={stopSending}>
+              {t.stopSending}
+            </button>
+          </>
+        )}
       </section>
     )
   } else {
@@ -881,6 +988,11 @@ export default function ReportPage() {
         <PhoneIcon size={22} className="fl-r-911icon" />
         <span>{t.emergency}</span>
       </a>
+      {!online && sendProblem !== 'offline' && (
+        <p className="fl-r-offline" role="status">
+          {t.offline}
+        </p>
+      )}
       <main className="fl-r-main">{body}</main>
       <p className="fl-r-sr" role="status" aria-live="polite">
         {announcement}

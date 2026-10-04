@@ -16,12 +16,40 @@ export class MicError extends Error {
   }
 }
 
+/** Why a recording ended on its own: the time limit, or the phone took the microphone away. */
+export type AutoStopReason = 'limit' | 'interrupted'
+
 export interface RecorderOptions {
   maxSeconds?: number
   /** Loudness 0..1, called a few dozen times per second while recording. */
   onLevel?: (level: number) => void
-  /** Called once when the recording hits maxSeconds and stopped itself. */
-  onAutoStop?: (wav: Blob, seconds: number) => void
+  /**
+   * Called once when the recording stopped itself, with everything captured until then: at
+   * maxSeconds, or when the phone interrupted it (screen locked, app switched, incoming call).
+   */
+  onAutoStop?: (wav: Blob, seconds: number, reason: AutoStopReason) => void
+}
+
+// How long start() waits for each step that can silently hang on a phone before moving on.
+const RESUME_WAIT_MS = 1500 // ctx.resume() outside a gesture can stay pending forever on iOS
+const WORKLET_WAIT_MS = 3000 // addModule() of a blob: URL can hang instead of failing
+const FIRST_AUDIO_WAIT_MS = 4000 // no samples by then: the context never really started
+
+/** Resolves with the promise's value, or with `fallback` after `ms` (never rejects). */
+function within<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = window.setTimeout(() => resolve(fallback), ms)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      () => {
+        window.clearTimeout(timer)
+        resolve(fallback)
+      },
+    )
+  })
 }
 
 /** Why voice notes cannot work in this page at all (checked before showing the RECORD button). */
@@ -100,7 +128,7 @@ registerProcessor('floodline-capture', FloodLineCapture)
 export class WavRecorder {
   private maxSeconds: number
   private onLevel?: (level: number) => void
-  private onAutoStop?: (wav: Blob, seconds: number) => void
+  private onAutoStop?: (wav: Blob, seconds: number, reason: AutoStopReason) => void
 
   private ctx: AudioContext | null = null
   private stream: MediaStream | null = null
@@ -113,6 +141,8 @@ export class WavRecorder {
   private samples = 0
   private active = false
   private finished = false
+  private gotAudio: (() => void) | null = null
+  private unwatch: (() => void) | null = null
 
   constructor(options: RecorderOptions = {}) {
     this.maxSeconds = options.maxSeconds ?? 60
@@ -132,6 +162,7 @@ export class WavRecorder {
   /**
    * Call this directly from the tap handler: iOS only lets an AudioContext start inside a user
    * gesture, so the context is created and resumed before the first await.
+   * Resolves once audio is actually arriving, so "Speak now" is never shown over a dead microphone.
    */
   async start(): Promise<void> {
     if (this.active || this.finished) throw new Error('recorder already used')
@@ -159,7 +190,9 @@ export class WavRecorder {
     }
 
     try {
-      if (ctx.state === 'suspended') await ctx.resume()
+      // 'interrupted' is iOS: another app or a call holds the audio session.
+      if (ctx.state !== 'running' && ctx.resume) await within(ctx.resume(), RESUME_WAIT_MS, undefined)
+      // Read the rate only now: it is the rate the microphone actually runs at (44.1 or 48 kHz).
       this.downsampler = new Downsampler(ctx.sampleRate)
       this.source = ctx.createMediaStreamSource(this.stream)
       // Processing nodes only run when something pulls on them, so route them into the speakers
@@ -178,6 +211,65 @@ export class WavRecorder {
       this.teardown()
       throw new MicError('failed', 'cancelled')
     }
+
+    // Wait for the first samples. A context that stays suspended (iOS sometimes refuses to start
+    // one) delivers none; failing here lets the reporter simply tap again, a fresh gesture.
+    const flowing = await new Promise<boolean>((resolve) => {
+      if (this.samples > 0) return resolve(true)
+      const timer = window.setTimeout(() => {
+        this.gotAudio = null
+        resolve(false)
+      }, FIRST_AUDIO_WAIT_MS)
+      this.gotAudio = () => {
+        window.clearTimeout(timer)
+        this.gotAudio = null
+        resolve(true)
+      }
+    })
+    if (!this.active) {
+      this.teardown()
+      throw new MicError('failed', 'cancelled')
+    }
+    if (!flowing) {
+      this.teardown()
+      throw new MicError('failed', 'no audio')
+    }
+    this.watchInterruptions(ctx)
+  }
+
+  /**
+   * Locking the screen, switching apps or an incoming call takes the microphone away (iOS marks
+   * the context 'interrupted', Android may end the track). Rather than show a clock that has
+   * silently stopped, finish the recording right there and keep what was said.
+   */
+  private watchInterruptions(ctx: AudioContext) {
+    const interrupt = () => {
+      if (this.active) this.finishEarly('interrupted')
+    }
+    const onState = () => {
+      if (ctx.state !== 'running') interrupt()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') interrupt()
+    }
+    const tracks = this.stream ? this.stream.getAudioTracks() : []
+    ctx.addEventListener('statechange', onState)
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', interrupt) // Safari 13 has no reliable visibilitychange
+    tracks.forEach((track) => track.addEventListener('ended', interrupt))
+    this.unwatch = () => {
+      ctx.removeEventListener('statechange', onState)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', interrupt)
+      tracks.forEach((track) => track.removeEventListener('ended', interrupt))
+    }
+  }
+
+  private finishEarly(reason: AutoStopReason) {
+    const seconds = this.elapsed
+    const wav = this.buildWav()
+    this.teardown()
+    this.onAutoStop?.(wav, seconds, reason)
   }
 
   /** Stops recording and returns the WAV. Safe to call more than once. */
@@ -203,7 +295,12 @@ export class WavRecorder {
     if (!ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return null
     try {
       this.moduleUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }))
-      await ctx.audioWorklet.addModule(this.moduleUrl)
+      const loaded = await within(
+        ctx.audioWorklet.addModule(this.moduleUrl).then(() => true),
+        WORKLET_WAIT_MS,
+        false,
+      )
+      if (!loaded) return null
       const node = new AudioWorkletNode(ctx, 'floodline-capture', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
@@ -237,6 +334,7 @@ export class WavRecorder {
     if (kept.length) {
       this.chunks.push(kept)
       this.samples += kept.length
+      this.gotAudio?.()
     }
 
     if (this.onLevel) {
@@ -247,17 +345,14 @@ export class WavRecorder {
       this.onLevel(Math.min(1, Math.sqrt(rms) * 1.8))
     }
 
-    if (this.samples >= limit) {
-      const seconds = this.elapsed
-      const wav = this.buildWav()
-      this.teardown()
-      this.onAutoStop?.(wav, seconds)
-    }
+    if (this.samples >= limit) this.finishEarly('limit')
   }
 
   private teardown() {
     this.active = false
     this.finished = true
+    this.unwatch?.()
+    this.unwatch = null
     if (this.node) {
       const port = (this.node as Partial<AudioWorkletNode>).port
       if (port) port.onmessage = null

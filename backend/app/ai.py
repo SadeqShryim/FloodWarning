@@ -3,18 +3,31 @@
 One request per report: the audio goes inline with the instruction prompt, and Gemini answers
 with JSON that follows _RESPONSE_SCHEMA. We then validate and normalize it into models.Extraction.
 
-Models are tried in order (config.GEMINI_MODEL, then config.GEMINI_FALLBACK_MODELS). We move on
-when a model is missing or not open to this key (404/403), out of quota (429) or overloaded (5xx).
-Any other failure, or running past config.AI_TIMEOUT_S, raises AIError with a short reason that
-service.py stores in `ai_error`; the report itself is always kept.
+Models are tried in order (config.GEMINI_MODEL, then config.GEMINI_FALLBACK_MODELS) inside one
+time budget (config.AI_TIMEOUT_S). What each failure means:
+
+- 404 NOT_FOUND / 403 PERMISSION_DENIED, or 429 with "limit: 0" (no free-tier access at all):
+  this key cannot use the model. Remembered for the life of the process; later calls skip it.
+  (Google now limits the 2.5 models to projects that used them before, so a new key may get this.)
+- 429 RESOURCE_EXHAUSTED: per-minute quota. Skipped until the retry delay Google sends has passed.
+- 5xx, 408, network errors, or a model that does not answer in its share of the budget: try the next.
+- 400 that names the thinking config: retry the same model with the next thinking setting.
+- 400/401/403 about the API key: stop at once ("API key rejected"); every model would say the same.
+- Other 400s: try the next model (a model-specific rejection must not cost the report).
+
+No model gets the whole budget while another is still waiting: the first ones leave RESERVE_S
+for the rest. Any failure raises AIError with a short reason that service.py stores in `ai_error`;
+the report itself is always kept. Every attempt is logged with the model and its latency.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import os
 import re
 import time
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
@@ -35,11 +48,24 @@ class AIError(Exception):
 _client: Any = None
 _client_key: str | None = None
 _last_model: str | None = None  # the model that answered most recently (shown in the UI)
-_unavailable: set[str] = set()  # models that said 404/403 this session; skipped while others remain
-_no_thinking: set[str] = set()  # models that rejected our thinking config; we stop sending it
+_unavailable: set[str] = set()  # models this key cannot use (404/403/limit 0); skipped while others remain
+_cooldown: dict[str, float] = {}  # model -> time.monotonic() until which it is out of quota (429)
+_thinking_step: dict[str, int] = {}  # model -> index into _thinking_options() that the model accepts
+_state_key: str | None = None  # the API key the memory above was learned with
+_warmup_task: asyncio.Task | None = None
+_warmup_started = False
 
 # Gemini accepts at most ~20 MB per inline request (prompt + all files). Stay under it.
 _MAX_INLINE_BYTES = 19 * 1024 * 1024
+
+# Budget split: while another model is still waiting, an attempt may use what is left minus RESERVE_S
+# (at most a third of it), so one hanging model cannot starve the one that works. With the default
+# 15 s budget the first model gets ~9.7 s and the next one at least 5 s. MIN_ATTEMPT_S: not worth
+# starting a request with less time than this.
+RESERVE_S = 5.0
+MIN_ATTEMPT_S = 1.0
+QUOTA_COOLDOWN_S = 20.0  # 429 without a retry delay: skip the model this long
+MAX_COOLDOWN_S = 120.0
 
 
 def ai_enabled() -> bool:
@@ -48,14 +74,29 @@ def ai_enabled() -> bool:
 
 
 def active_model() -> str | None:
-    """Model name for the UI: the last model that answered, else the configured one. None when AI is off."""
+    """Model name for the UI: the last model that answered, else the first one we would try. None when AI is off."""
     if not ai_enabled():
         return None
-    return _last_model or config.GEMINI_MODEL
+    if _last_model:
+        return _last_model
+    chain = model_chain()
+    return chain[0] if chain else config.GEMINI_MODEL
+
+
+def _forget_if_key_changed() -> None:
+    """What we learned about models belongs to one key; a new key starts fresh."""
+    global _state_key, _last_model
+    key = config.GEMINI_API_KEY
+    if key != _state_key:
+        _unavailable.clear()
+        _cooldown.clear()
+        _thinking_step.clear()
+        _last_model = None
+        _state_key = key
 
 
 def _get_client() -> Any:
-    """Create the google-genai client on first use (and again if the key changes)."""
+    """Create the google-genai client on first use (and again if the key changes). Blocking: call via _client_for_call."""
     global _client, _client_key
     key = config.GEMINI_API_KEY
     if not key:
@@ -68,46 +109,159 @@ def _get_client() -> Any:
     return _client
 
 
-def model_chain() -> list[str]:
-    """Configured model first, then the fallbacks, without duplicates.
+async def _client_for_call() -> Any:
+    """The client, created off the event loop: importing google.genai and building the client takes
+    1-3 s on the demo laptop and would otherwise freeze every open dashboard stream meanwhile."""
+    if _client is not None and _client_key == config.GEMINI_API_KEY:
+        return _get_client()
+    return await asyncio.to_thread(_get_client)
 
-    Models that already answered 404/403 go to the back instead of being dropped, so a
-    temporary hiccup cannot leave us with an empty chain.
-    """
+
+def _configured_chain() -> list[str]:
     chain: list[str] = []
     for name in [config.GEMINI_MODEL, *config.GEMINI_FALLBACK_MODELS]:
         name = (name or "").strip()
         if name and name not in chain:
             chain.append(name)
-    return [m for m in chain if m not in _unavailable] + [m for m in chain if m in _unavailable]
+    return chain
 
 
-def _thinking_config(model: str) -> Any:
-    """Thinking costs seconds we do not have, so turn it down as far as each family allows.
+def model_chain() -> list[str]:
+    """Models to try, in order: configured model first, then the fallbacks, without duplicates.
 
-    - gemini-2.5-*: thinking_budget=0 switches it off (Flash and Flash-Lite; 2.5 Pro rejects it,
-      which the caller handles by retrying without).
-    - gemini-3+ Flash and the "-latest" aliases: thinking cannot be switched off, but
-      thinking_level="minimal" is the documented low-latency setting.
-    - Anything else: no thinking config.
+    Models this key cannot use (404/403) are left out, and so are models still cooling down after a
+    429. If that would leave nothing, everything is tried anyway (cooling-down models first) so a
+    hiccup can never lock the AI out for good.
+    """
+    _forget_if_key_changed()
+    chain = _configured_chain()
+    now = time.monotonic()
+    ready = [m for m in chain if m not in _unavailable and _cooldown.get(m, 0) <= now]
+    if ready:
+        return ready
+    cooling = [m for m in chain if m not in _unavailable]
+    return cooling + [m for m in chain if m in _unavailable]
+
+
+def _version(name: str) -> float | None:
+    match = re.match(r"gemini-(\d+(?:\.\d+)?)", name)
+    return float(match.group(1)) if match else None
+
+
+def _thinking_options(model: str) -> list[Any]:
+    """Thinking settings to try for a model, fastest first; None means "send no thinking config".
+
+    Thinking costs seconds we do not have (checked against ai.google.dev, Oct 2026):
+    - gemini-2.5 Flash / Flash-Lite: thinking_budget=0 switches it off.
+    - Gemini 3 Flash models up to 3.6 and every Flash-Lite accept thinking_level "minimal".
+    - gemini-3.7-flash and gemini-3.8-flash reject "minimal" with a 400 ("minimal is not supported
+      and returns an error"); "low" is their fastest setting. gemini-flash-latest points at the newest
+      Flash, so it gets "low". Pro models: "low" (no minimal, and 2.5 Pro cannot turn thinking off).
+    A model that rejects a setting moves on to the next one (remembered in _thinking_step).
+    Sending thinking_budget and thinking_level together is a 400, so we only ever send one.
     """
     from google.genai import types
 
     name = model.lower()
-    if model in _no_thinking:
-        return None
-    if name.startswith("gemini-2.5"):
-        return types.ThinkingConfig(thinking_budget=0)
-    match = re.match(r"gemini-(\d+)", name)
-    newer = bool(match and int(match.group(1)) >= 3)
-    if "flash" in name and (newer or "latest" in name):
-        return types.ThinkingConfig(thinking_level="minimal")
-    return None
+    minimal = types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
+    low = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    version = _version(name)
+    if "flash" not in name and "pro" not in name:
+        return [None]
+    if version is not None and version < 2.5:
+        return [None]  # 2.0 and older have no thinking
+    if "pro" in name:
+        return [low, None]
+    if version is not None and version < 3:
+        return [types.ThinkingConfig(thinking_budget=0), low, None]
+    if "lite" in name or (version is not None and version < 3.7):
+        return [minimal, low, None]
+    return [low, None]  # gemini-3.7+/3.8 flash, gemini-flash-latest and unknown newer Flash models
+
+
+def _thinking_config(model: str) -> Any:
+    """The thinking config the next request to `model` will carry (None: none)."""
+    options = _thinking_options(model)
+    return options[min(_thinking_step.get(model, 0), len(options) - 1)]
+
+
+def _temperature(model: str) -> float | None:
+    """Low temperature keeps 2.x transcripts verbatim. Gemini 3 docs: keep the default 1.0 (lower can loop)."""
+    version = _version(model.lower())
+    return 0.2 if version is not None and version < 3 else None
 
 
 def _short(text: Any, limit: int = 80) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+# --- error classification -----------------------------------------------------------------
+
+_STATUS_CODES = {
+    "INVALID_ARGUMENT": 400, "FAILED_PRECONDITION": 400, "UNAUTHENTICATED": 401, "PERMISSION_DENIED": 403,
+    "NOT_FOUND": 404, "RESOURCE_EXHAUSTED": 429, "INTERNAL": 500, "UNAVAILABLE": 503, "DEADLINE_EXCEEDED": 504,
+}
+# Problems with the key itself (every model would answer the same). Deliberately narrow: a 403
+# "API key does not have permission for this resource" is about one model and must move on.
+_KEY_PROBLEM = re.compile(
+    r"API_KEY_INVALID|API key not valid|API key expired|API_KEY_EXPIRED|reported as leaked|SERVICE_DISABLED|"
+    r"has not been used in project|CONSUMER_SUSPENDED",
+    re.IGNORECASE,
+)
+_THINKING_PROBLEM = re.compile(r"think|budget", re.IGNORECASE)
+
+
+def _error_code(exc: Any) -> int:
+    code = getattr(exc, "code", None)
+    try:
+        return int(code)
+    except (TypeError, ValueError):
+        return _STATUS_CODES.get(str(getattr(exc, "status", "") or "").upper(), 0)
+
+
+def _error_text(exc: Any) -> str:
+    """Message plus details: the reason codes (API_KEY_INVALID, RetryInfo) live in the details."""
+    parts = [str(getattr(exc, "message", "") or ""), str(getattr(exc, "status", "") or "")]
+    try:
+        parts.append(json.dumps(getattr(exc, "details", None), default=str))
+    except (TypeError, ValueError):
+        pass
+    return " ".join(parts)
+
+
+def _retry_delay_s(exc: Any) -> float:
+    """RetryInfo.retryDelay ("37s") from a 429, else QUOTA_COOLDOWN_S."""
+    match = re.search(r'"retryDelay":\s*"(\d+(?:\.\d+)?)s"', _error_text(exc))
+    delay = float(match.group(1)) if match else QUOTA_COOLDOWN_S
+    return max(1.0, min(MAX_COOLDOWN_S, delay))
+
+
+def _is_network_error(exc: BaseException) -> bool:
+    if isinstance(exc, (ConnectionError, OSError)):
+        return True
+    module = type(exc).__module__ or ""
+    return module.startswith(("aiohttp", "httpx", "httpcore", "ssl"))
+
+
+# --- the call -----------------------------------------------------------------------------
+
+
+def _build_config(model: str, system_instruction: str, json_schema: dict | None, max_output_tokens: int) -> Any:
+    from google.genai import types
+
+    cfg: dict[str, Any] = {"system_instruction": system_instruction, "max_output_tokens": max_output_tokens}
+    if json_schema is not None:
+        # responseJsonSchema (plain JSON Schema, type arrays for null) is supported by 2.5 and 3.x.
+        cfg["response_mime_type"] = "application/json"
+        cfg["response_json_schema"] = json_schema
+    temperature = _temperature(model)
+    if temperature is not None:
+        cfg["temperature"] = temperature
+    thinking = _thinking_config(model)
+    if thinking is not None:
+        cfg["thinking_config"] = thinking
+    return types.GenerateContentConfig(**cfg)
 
 
 async def _generate(
@@ -116,67 +270,186 @@ async def _generate(
     system_instruction: str,
     json_schema: dict | None = None,
     max_output_tokens: int = 2048,
-) -> tuple[str, str]:
-    """Run one prompt through the model chain. Returns (response text, model that answered)."""
+    budget_s: float | None = None,
+    accept: Callable[[str], Any] | None = None,
+    allow_empty: bool = False,
+) -> tuple[Any, str]:
+    """Run one prompt through the model chain within budget_s seconds.
+
+    Returns (result, model) where result is accept(text) when `accept` is given, else the text.
+    `accept` may raise AIError("bad output"); the next model then gets a chance if time is left.
+    """
     global _last_model
-    from google.genai import errors, types
+    from google.genai import errors
 
-    client = _get_client()
+    budget = config.AI_TIMEOUT_S if budget_s is None else budget_s
+    deadline = time.monotonic() + budget  # set before the client exists: building it can take seconds
+    client = await _client_for_call()
     reasons: list[str] = []
-    for model in model_chain():
+    chain = model_chain()
+    i = 0
+    while i < len(chain):
+        model = chain[i]
+        remaining = deadline - time.monotonic()
+        if remaining < MIN_ATTEMPT_S:
+            reasons.append("timeout")
+            break
+        # While another model is still waiting, leave it a share of the budget (RESERVE_S, at most
+        # a third of what is left): a hanging model must not starve the one that works.
+        reserve = min(RESERVE_S, remaining / 3) if i < len(chain) - 1 else 0.0
+        cap = remaining - reserve if remaining - reserve >= MIN_ATTEMPT_S else remaining
         thinking = _thinking_config(model)
-        attempts = [thinking, None] if thinking is not None else [None]
-        for thinking_cfg in attempts:
-            cfg: dict[str, Any] = {"system_instruction": system_instruction, "max_output_tokens": max_output_tokens}
-            if json_schema is not None:
-                cfg["response_mime_type"] = "application/json"
-                cfg["response_json_schema"] = json_schema
-            if model.lower().startswith("gemini-2"):
-                # Low temperature keeps transcripts verbatim. Gemini 3 docs ask to keep the default 1.0.
-                cfg["temperature"] = 0.2
-            if thinking_cfg is not None:
-                cfg["thinking_config"] = thinking_cfg
-            try:
-                response = await client.aio.models.generate_content(
-                    model=model, contents=contents, config=types.GenerateContentConfig(**cfg)
-                )
-            except errors.APIError as exc:
-                code = getattr(exc, "code", None) or 0
-                detail = _short(getattr(exc, "message", None) or exc)
-                if code == 400 and thinking_cfg is not None:
-                    log.info("gemini model=%s rejected thinking config (%s); retrying without", model, detail)
-                    _no_thinking.add(model)
-                    continue
-                if code in (403, 404):
-                    log.warning("gemini model=%s unavailable (%s %s); trying next", model, code, detail)
-                    _unavailable.add(model)
-                    reasons.append("model unavailable")
-                    break
-                if code == 429:
-                    log.warning("gemini model=%s out of quota (%s); trying next", model, detail)
-                    reasons.append("quota")
-                    break
-                if code >= 500:
-                    log.warning("gemini model=%s server error %s (%s); trying next", model, code, detail)
-                    reasons.append("model unavailable")
-                    break
-                raise AIError(f"error: {code} {detail}".strip()) from exc
-            _unavailable.discard(model)
-            text = _response_text(response)
-            _last_model = model
-            return text, model
-    # Every model refused. Quota is the most useful thing to tell the operator about.
-    raise AIError("quota" if "quota" in reasons else "model unavailable")
+        started = time.monotonic()
+        try:
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model, contents=contents,
+                    config=_build_config(model, system_instruction, json_schema, max_output_tokens),
+                ),
+                timeout=cap,
+            )
+        except errors.APIError as exc:
+            code = _error_code(exc)
+            detail = _short(getattr(exc, "message", None) or exc)
+            text = _error_text(exc)
+            ms = int((time.monotonic() - started) * 1000)
+            if code == 401 or (code in (400, 403) and _KEY_PROBLEM.search(text)):
+                log.error("gemini model=%s: API key rejected (%s %s, %d ms)", model, code, detail, ms)
+                raise AIError(f"API key rejected: {_short(detail, 60)}") from exc
+            if code == 400 and thinking is not None and _THINKING_PROBLEM.search(text):
+                _thinking_step[model] = _thinking_step.get(model, 0) + 1
+                log.warning("gemini model=%s rejected thinking config %s (%s); retrying with %s",
+                            model, _describe_thinking(thinking), detail, _describe_thinking(_thinking_config(model)))
+                continue  # same model, next thinking setting
+            if code in (403, 404) or (code == 429 and re.search(r"limit:\s*0\b", text)):
+                _unavailable.add(model)
+                log.warning("gemini model=%s unavailable to this key (%s %s, %d ms); skipping it from now on",
+                            model, code, detail, ms)
+                reasons.append("model unavailable")
+            elif code == 429:
+                delay = _retry_delay_s(exc)
+                _cooldown[model] = time.monotonic() + delay
+                log.warning("gemini model=%s out of quota (%s, %d ms); skipping it for %.0f s", model, detail, ms, delay)
+                reasons.append("quota")
+            elif code >= 500 or code == 408:
+                log.warning("gemini model=%s server error %s (%s, %d ms); trying next", model, code, detail, ms)
+                reasons.append("model unavailable")
+            else:
+                log.warning("gemini model=%s refused the request (%s %s, %d ms); trying next", model, code, detail, ms)
+                reasons.append(f"error: {code} {detail}".strip())
+            i += 1
+            continue
+        except (TimeoutError, asyncio.TimeoutError):
+            log.warning("gemini model=%s did not answer within %.1f s; trying next", model, cap)
+            reasons.append("timeout")
+            i += 1
+            continue
+        except Exception as exc:  # noqa: BLE001 - network trouble: the next model may still get through
+            if not _is_network_error(exc):
+                raise
+            log.warning("gemini model=%s network error %s: %s", model, type(exc).__name__, _short(exc))
+            reasons.append(f"error: network ({type(exc).__name__})")
+            i += 1
+            continue
+
+        ms = int((time.monotonic() - started) * 1000)
+        _unavailable.discard(model)
+        _cooldown.pop(model, None)
+        try:
+            text = _response_text(response, allow_empty=allow_empty)
+            result = accept(text) if accept is not None else text
+        except AIError as exc:
+            log.warning("gemini model=%s answered in %d ms but the output was unusable (%s)", model, ms, exc)
+            reasons.append(str(exc))
+            i += 1
+            continue
+        _last_model = model
+        log.info("gemini answered: model=%s latency_ms=%d thinking=%s", model, ms, _describe_thinking(thinking))
+        return result, model
+    raise AIError(_pick_reason(reasons))
 
 
-def _response_text(response: Any) -> str:
+def _pick_reason(reasons: list[str]) -> str:
+    """The most useful single reason for the operator when every model failed."""
+    for wanted in ("quota", "bad output", "timeout"):
+        if wanted in reasons:
+            return wanted
+    errors_ = [r for r in reasons if r.startswith("error:")]
+    if errors_:
+        return errors_[0]
+    return "model unavailable"
+
+
+def _describe_thinking(thinking: Any) -> str:
+    if thinking is None:
+        return "default"
+    if getattr(thinking, "thinking_level", None) is not None:
+        return f"level={thinking.thinking_level.value.lower()}"
+    return f"budget={thinking.thinking_budget}"
+
+
+def _response_text(response: Any, *, allow_empty: bool = False) -> str:
     try:
         text = response.text
     except Exception:  # noqa: BLE001 - odd responses (blocked, no candidates) are just "bad output"
         text = None
     if not text or not str(text).strip():
+        if allow_empty:
+            return ""
         raise AIError("bad output")
     return str(text)
+
+
+# --- warm-up ------------------------------------------------------------------------------
+
+
+async def warm_up() -> str | None:
+    """One tiny text-only call through the model chain, so the first real report is fast.
+
+    It imports the SDK and builds the client off the event loop, opens the HTTPS connection, and
+    finds out which models this key can use (a 404/403 model is skipped from then on), so the
+    first judge's voice note goes straight to a model that answers. Returns the model or None.
+    Never raises.
+    """
+    if not ai_enabled():
+        return None
+    started = time.perf_counter()
+    try:
+        _, model = await _generate(
+            ["Reply with the single word OK."],
+            system_instruction="Health check. Answer with one word.",
+            max_output_tokens=32,
+            budget_s=config.AI_TIMEOUT_S,
+            allow_empty=True,  # a 200 is all we need; tiny limits can end before any text
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("gemini warm-up failed after %d ms: %s (reports will still try every model)",
+                    int((time.perf_counter() - started) * 1000), exc)
+        return None
+    log.info("gemini warm-up: %s ready in %d ms (unavailable to this key: %s)", model,
+             int((time.perf_counter() - started) * 1000), ", ".join(sorted(_unavailable)) or "none")
+    return model
+
+
+def schedule_warm_up() -> asyncio.Task | None:
+    """Start warm_up() in the background, at most once per process. Call from the running event loop
+    (the app's startup); it returns at once and never delays startup.
+
+    Skipped when AI is off, under pytest (tests must stay hermetic even if a real key is in .env),
+    or with FLOODLINE_AI_WARMUP=0.
+    """
+    global _warmup_task, _warmup_started
+    if _warmup_started or not ai_enabled():
+        return None
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("FLOODLINE_AI_WARMUP", "1").strip() == "0":
+        return None
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+    _warmup_started = True
+    _warmup_task = loop.create_task(warm_up(), name="gemini-warm-up")
+    return _warmup_task
 
 
 # --- the prompt ---------------------------------------------------------------------------
@@ -196,15 +469,17 @@ Fields:
 Arabic script, keeping dialect words exactly as said; do not translate, correct or summarize). If there is no \
 audio, copy the typed text. If there are both, transcribe the audio, then add the typed text on a new line. \
 If the audio is silent or unintelligible, return an empty string.
-- language: ISO 639-1 code of the main language spoken (for example "ar", "en", "es").
+- language: ISO 639-1 code of the language most of the words are in (for example "ar", "en", "es").
 - transcript_english: faithful, complete English translation of transcript_original (identical if it is \
 already English). Write street names the way they appear on English maps.
-- ai_summary: one English line for responders, at most 15 words: who, where, how bad. Example: \
-"Elderly woman in basement, knee-deep water rising, cannot climb stairs".
-- confirmation_message: in the reporter's own language and a simple, warm register (Arabic: plain Levantine-\
-friendly Arabic), calm, at most 25 words. Say the report was received and repeat the key facts you understood \
-(water level, who is at risk, place). Never promise that help is coming and never give an arrival time. \
-End by telling them to call 911 if a life is in danger.
+- ai_summary: one short English line for responders, at most 15 words: who, where, how bad. Example: \
+"Elderly woman trapped in basement, knee-deep water rising".
+- confirmation_message: a reply to the reporter, written in the SAME language and script as \
+transcript_original (Arabic speech gets an Arabic reply in Arabic script, Spanish gets Spanish; English only \
+if they spoke English; with no speech, use the phone's language). Simple, warm, calm, at most 25 words. Say \
+the report was received and repeat the key facts you understood (water level, who is at risk, place). Never \
+promise that help is coming and never give an arrival time. End by telling them to call 911 if a life is in \
+danger.
 - water_depth_cm: deepest water mentioned or visible, as an integer number of centimeters, or null. \
 Conversions: ankle 10, mid-shin 30, knee 50, thigh 75, waist 100, chest 130; feet x 30.48; inches x 2.54; \
 halfway up a car tire about 30.
@@ -212,18 +487,24 @@ halfway up a car tire about 30.
 house or apartment); "street" (road, underpass, yard, parking lot); "car" (someone is inside a vehicle); \
 or "other".
 - location_hint: any street, cross streets, landmark or neighborhood mentioned, in Latin letters as it would \
-appear on a map (for example "Warren Ave and Schaefer Rd", "Fordson High School"), or null. Do not guess.
-- water_in_living_space: true if water is in a finished or occupied basement, a bedroom, or a living area \
-where people live or sleep.
-- water_rising: true only if the person says the water is still rising or still coming in.
+appear on a map (for example "Warren Ave and Schaefer Rd", "Fordson High School"), or null. Do not guess. \
+Use the map spelling of Dearborn streets even when said in Arabic or with an accent: Warren, Schaefer, Miller, \
+Wyoming, Ford Rd, Michigan Ave, Dix, Vernor, Salina, Chase, Greenfield, Oakwood, Southfield, Telegraph, \
+Outer Dr, Cherry Hill, Rotunda, Monroe, Military, Brady, Hubbard, Tireman, Evergreen, Lonyo, Calhoun, \
+Morley, Paul, Colson, Kendal, Mercury, Fairlane, Springwells, Wagner (Arabic "وارن وشيفر" is "Warren and \
+Schaefer").
+- water_in_living_space: true if water is in a finished basement, a basement where someone is or lives, a \
+bedroom, or a living area where people live or sleep.
+- water_rising: true only if the person says the water is still rising, keeps coming in or keeps going up.
 - hazards.electrical: water touching or near outlets, the electrical panel, appliances or wires; sparks; \
 buzzing. hazards.sewage: sewage or sewer backup, black water. hazards.gas: gas smell or leak. \
 hazards.structural: collapse, cracking walls or foundation, sagging ceiling.
 - people_at_risk.elderly / children / disabled (wheelchair, cannot walk, bedridden): true only if such a \
-person is at the flooded place. people_at_risk.trapped: true ONLY when someone cannot get out on their own \
-(cannot climb the stairs, door blocked, water too deep to leave, stuck in a car). people_at_risk.medical: \
-injury, breathing trouble, chest pain, unconscious, or powered medical equipment at risk (oxygen \
-concentrator, home dialysis). people_at_risk.count: number of people at the location if stated, else null.
+person is in the flooded building or vehicle (any floor). people_at_risk.trapped: true ONLY when someone \
+cannot get out on their own (cannot climb the stairs, door blocked, water too deep to leave, stuck in a car). \
+people_at_risk.medical: injury, breathing trouble, chest pain, unconscious, or powered medical equipment at \
+risk (oxygen concentrator, home dialysis). people_at_risk.count: number of people at risk at the location \
+if stated, else null.
 - needs.evacuation: someone must be brought out. needs.pumping: water must be pumped out of a home. \
 needs.medical: medical help needed now. needs.supplies: they ask for food, drinking water, sandbags, shelter.
 If a photo is attached, use it as evidence for depth and hazards, but clear spoken facts win.
@@ -245,8 +526,8 @@ _RESPONSE_SCHEMA: dict = {
         "transcript_original": {"type": "string", "description": "Verbatim transcript in the original language and script"},
         "language": {"type": "string", "description": "ISO 639-1 code, e.g. ar, en, es"},
         "transcript_english": {"type": "string", "description": "Faithful English translation"},
-        "ai_summary": {"type": "string", "description": "One English line, at most 15 words"},
-        "confirmation_message": {"type": "string", "description": "In the reporter's language, at most 25 words, ends with call 911 if life is in danger"},
+        "ai_summary": {"type": "string", "description": "One English line for responders, at most 15 words"},
+        "confirmation_message": {"type": "string", "description": "Reply in the same language and script as transcript_original, at most 25 words, ends with call 911 if life is in danger"},
         "water_depth_cm": {"type": ["integer", "null"], "description": "Deepest water in cm, or null"},
         "location_type": {"type": "string", "enum": ["basement", "home", "street", "car", "other"]},
         "location_hint": {"type": ["string", "null"], "description": "Street, cross streets or landmark in Latin letters, or null"},
@@ -480,18 +761,23 @@ async def extract_report(
     model = None
     try:
         contents = _build_contents(audio, audio_mime, text, photo, photo_mime, ui_language)
-        raw, model = await asyncio.wait_for(
-            _generate(contents, system_instruction=SYSTEM_PROMPT, json_schema=_RESPONSE_SCHEMA),
+        # The chain keeps its own deadline a little inside the outer one, so it can report which
+        # model ran out of time; the outer wait_for is only the hard stop.
+        extraction, model = await asyncio.wait_for(
+            _generate(
+                contents, system_instruction=SYSTEM_PROMPT, json_schema=_RESPONSE_SCHEMA, max_output_tokens=4096,
+                budget_s=max(MIN_ATTEMPT_S, config.AI_TIMEOUT_S - 0.3),
+                accept=lambda raw: parse_extraction(raw, ui_language=ui_language),
+            ),
             timeout=config.AI_TIMEOUT_S,
         )
-        extraction = parse_extraction(raw, ui_language=ui_language)
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         _log_outcome(model, started, "timeout")
         raise AIError("timeout") from None
     except AIError as exc:
         _log_outcome(model, started, str(exc))
         raise
-    except Exception as exc:  # noqa: BLE001 - network errors, SDK surprises: keep the reason short
+    except Exception as exc:  # noqa: BLE001 - SDK surprises: keep the reason short
         _log_outcome(model, started, f"error: {type(exc).__name__}")
         raise AIError(f"error: {_short(type(exc).__name__ + ' ' + str(exc), 60)}") from exc
 
@@ -507,9 +793,11 @@ async def generate_text(prompt: str, *, system_instruction: str, timeout_s: floa
     started = time.perf_counter()
     try:
         text, model = await asyncio.wait_for(
-            _generate([prompt], system_instruction=system_instruction, max_output_tokens=1024), timeout=timeout_s
+            _generate([prompt], system_instruction=system_instruction, max_output_tokens=2048,
+                      budget_s=max(MIN_ATTEMPT_S, timeout_s - 0.3)),
+            timeout=timeout_s,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         _log_outcome(None, started, "timeout", kind="text")
         raise AIError("timeout") from None
     except AIError as exc:
@@ -525,4 +813,4 @@ async def generate_text(prompt: str, *, system_instruction: str, timeout_s: floa
 def _log_outcome(model: str | None, started: float, outcome: str, kind: str = "extract") -> None:
     latency_ms = int((time.perf_counter() - started) * 1000)
     level = logging.INFO if outcome == "ok" else logging.WARNING
-    log.log(level, "gemini %s model=%s latency_ms=%d outcome=%s", kind, model or _last_model or "-", latency_ms, outcome)
+    log.log(level, "gemini %s model=%s latency_ms=%d outcome=%s", kind, model or "-", latency_ms, outcome)

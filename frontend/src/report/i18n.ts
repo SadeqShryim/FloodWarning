@@ -48,6 +48,10 @@ export interface Strings {
 
   sending: string
   sendingLead: string
+  sendingProgress: (percent: number) => string
+  sendingAlmost: string
+  sendingSlow: string
+  stopSending: string
 
   locating: string
   locFound: (meters: number) => string
@@ -55,6 +59,7 @@ export interface Strings {
   locDenied: string
   locInsecure: string
   locRetry: string
+  addAddress: string
   addressLabel: string
   addressPlaceholder: string
   addressHint: string
@@ -66,6 +71,8 @@ export interface Strings {
   micInsecure: string
   micFailed: string
   micEmpty: string
+  micInterrupted: string
+  micInterruptedKept: string
   typeYourReport: string
 
   errNetwork: string
@@ -73,6 +80,9 @@ export interface Strings {
   errServer: string
   errTooLarge: string
   errMissing: string
+  errOffline: string
+  errStopped: string
+  offline: string
 
   doneTitle: string
   reportNumber: (id: number) => string
@@ -151,6 +161,10 @@ const en: Strings = {
 
   sending: 'Sending your report…',
   sendingLead: 'Keep this page open.',
+  sendingProgress: (pct) => `${pct}% sent`,
+  sendingAlmost: 'Almost done…',
+  sendingSlow: 'The connection is slow. Still sending…',
+  stopSending: 'Stop sending',
 
   locating: 'Finding your location…',
   locFound: (m) => `Location found (±${m} m)`,
@@ -158,6 +172,7 @@ const en: Strings = {
   locDenied: 'Location is turned off for this page.',
   locInsecure: 'Location needs the secure https link.',
   locRetry: 'Try again',
+  addAddress: 'Add an address',
   addressLabel: 'Street and nearest cross street',
   addressPlaceholder: 'Example: Warren Ave and Schaefer Rd',
   addressHint: 'Or just say the place in your voice note.',
@@ -170,6 +185,9 @@ const en: Strings = {
     'Voice notes need the secure link that starts with https://. Scan the QR code again, or type your report here.',
   micFailed: 'Recording did not start. Try again, or type your report.',
   micEmpty: 'That recording was empty. Try again and hold the phone closer.',
+  micInterrupted: 'Recording stopped because the screen locked, another app opened, or a call came in. Tap Record to try again.',
+  micInterruptedKept:
+    'Recording stopped because the screen locked, another app opened, or a call came in. What you said so far is saved here.',
   typeYourReport: 'Type your report',
 
   errNetwork: 'Could not reach FloodLine. Your report is still here. Check your signal and try again.',
@@ -177,6 +195,9 @@ const en: Strings = {
   errServer: 'FloodLine could not save the report. Your report is still here. Try again.',
   errTooLarge: 'The photo or recording is too large. Remove the photo and try again.',
   errMissing: 'Record a voice note or write a few words first.',
+  errOffline: 'Your phone is offline. Your report is still here. Try again when you have signal.',
+  errStopped: 'Sending stopped. Your report is still here. Try again when you are ready.',
+  offline: 'No internet connection. Your report will wait here until you have signal.',
 
   doneTitle: 'Report received',
   reportNumber: (id) => `Report number ${id}`,
@@ -224,13 +245,13 @@ const ar: Strings = {
   langShort: 'عربي',
   langFull: 'العربية',
   langSwitcher: 'اللغة',
-  emergency: 'في حالة خطر على الحياة، اتصل بـ 911',
+  emergency: 'إذا كانت حياة أحد في خطر، اتصل بـ 911',
 
   idleTitle: 'أبلِغ عن فيضان',
-  idleLead: 'اضغط الزر الأحمر واحكِ لنا ما يحدث، بأي لغة.',
+  idleLead: 'اضغط على الزر الأحمر واحكِ لنا ما يحدث، بأي لغة.',
   record: 'سجّل',
   recordAria: 'ابدأ تسجيل رسالة صوتية',
-  recordHint: 'قل لنا أين أنت، وكم عمق الماء، ومن معك.',
+  recordHint: 'قل لنا أين أنت، وإلى أين وصل الماء، ومن معك.',
   typeInstead: 'أفضّل الكتابة',
 
   recordingTitle: 'نستمع إليك…',
@@ -259,55 +280,66 @@ const ar: Strings = {
   typeTitle: 'اكتب بلاغك',
   typeLead: 'احكِ لنا ما يحدث، بأي لغة.',
   typeLabel: 'ماذا يحدث؟',
-  typePlaceholder: 'مثال: الماء في القبو وصل إلى الركبة وما زال يرتفع. أمي عمرها 80 سنة ولا تقدر تطلع الدرج.',
+  typePlaceholder: 'مثال: الماء في القبو وصل إلى الركبة وما زال يرتفع. أمي عمرها 80 سنة ولا تستطيع صعود الدرج.',
   useVoice: 'أفضّل تسجيل رسالة صوتية',
   textEmpty: 'اكتب أولاً بضع كلمات عمّا يحدث.',
 
   sending: 'جارٍ إرسال بلاغك…',
   sendingLead: 'أبقِ هذه الصفحة مفتوحة.',
+  sendingProgress: (pct) => `تم إرسال ${pct}%`,
+  sendingAlmost: 'أوشكنا على الانتهاء…',
+  sendingSlow: 'الاتصال بطيء، وما زال الإرسال مستمراً…',
+  stopSending: 'أوقف الإرسال',
 
   locating: 'جارٍ تحديد موقعك…',
   locFound: (m) => `تم تحديد موقعك (±${m} م)`,
   locUnavailable: 'تعذّر تحديد موقعك.',
-  locDenied: 'خدمة الموقع مغلقة لهذه الصفحة.',
+  locDenied: 'لم يُسمح لهذه الصفحة بمعرفة موقعك.',
   locInsecure: 'تحديد الموقع يحتاج إلى الرابط الآمن https.',
   locRetry: 'حاول مجدداً',
+  addAddress: 'أضف العنوان',
   addressLabel: 'الشارع وأقرب تقاطع',
-  addressPlaceholder: 'مثال: شارع وارن عند تقاطع شيفر',
+  // Street names stay in English letters: that is how they are written on the signs and the map.
+  addressPlaceholder: 'مثال: Warren Ave و Schaefer Rd',
   addressHint: 'أو اذكر المكان في رسالتك الصوتية.',
 
-  micDenied: 'الميكروفون محظور. اسمح به من إعدادات المتصفح، أو اكتب بلاغك.',
+  micDenied: 'لم يُسمح باستخدام الميكروفون. اسمح به من إعدادات المتصفح، أو اكتب بلاغك.',
   micNotFound: 'لا يوجد ميكروفون في هذا الهاتف. يمكنك كتابة بلاغك.',
   micBusy: 'تطبيق آخر يستخدم الميكروفون. أغلقه وحاول مجدداً، أو اكتب بلاغك.',
   micUnsupported: 'هذا المتصفح لا يستطيع تسجيل الصوت. يمكنك كتابة بلاغك.',
   micInsecure: 'الرسائل الصوتية تحتاج إلى الرابط الآمن الذي يبدأ بـ https://. امسح رمز QR مرة أخرى، أو اكتب بلاغك هنا.',
   micFailed: 'لم يبدأ التسجيل. حاول مجدداً، أو اكتب بلاغك.',
-  micEmpty: 'التسجيل فارغ. حاول مجدداً وقرّب الهاتف منك.',
+  micEmpty: 'لم يُسجَّل أي صوت. حاول مجدداً وقرّب الهاتف من فمك.',
+  micInterrupted: 'توقف التسجيل لأن الشاشة قُفلت أو فُتح تطبيق آخر أو وصلت مكالمة. اضغط «سجّل» لتحاول مجدداً.',
+  micInterruptedKept: 'توقف التسجيل لأن الشاشة قُفلت أو فُتح تطبيق آخر أو وصلت مكالمة. ما قلته حتى الآن محفوظ هنا.',
   typeYourReport: 'اكتب بلاغك',
 
-  errNetwork: 'تعذّر الوصول إلى FloodLine. بلاغك ما زال هنا. تأكد من الإشارة وحاول مرة أخرى.',
-  errTimeout: 'الاتصال بطيء جداً. بلاغك ما زال هنا. حاول مرة أخرى.',
-  errServer: 'لم يتمكن FloodLine من حفظ البلاغ. بلاغك ما زال هنا. حاول مرة أخرى.',
+  errNetwork: 'تعذّر الوصول إلى FloodLine. بلاغك لم يضِع. تأكد من وجود إشارة وحاول مرة أخرى.',
+  errTimeout: 'الاتصال بطيء جداً. بلاغك لم يضِع. حاول مرة أخرى.',
+  errServer: 'لم يتمكن FloodLine من حفظ البلاغ. بلاغك لم يضِع. حاول مرة أخرى.',
   errTooLarge: 'الصورة أو التسجيل كبير جداً. احذف الصورة وحاول مرة أخرى.',
   errMissing: 'سجّل رسالة صوتية أو اكتب بضع كلمات أولاً.',
+  errOffline: 'هاتفك غير متصل بالإنترنت. بلاغك لم يضِع. حاول مرة أخرى عندما تعود الإشارة.',
+  errStopped: 'أوقفت الإرسال. بلاغك لم يضِع. أرسله عندما تكون جاهزاً.',
+  offline: 'لا يوجد اتصال بالإنترنت. سيبقى بلاغك هنا حتى تعود الإشارة.',
 
   doneTitle: 'وصلنا بلاغك',
   reportNumber: (id) => `رقم البلاغ ${id}`,
-  understanding: 'نقرأ بلاغك الآن…',
-  savedGeneric: 'بلاغك محفوظ، وفرق الاستجابة تراه الآن على خريطتها.',
+  understanding: 'نعمل على فهم بلاغك…',
+  savedGeneric: 'بلاغك محفوظ، وفرق الطوارئ تراه الآن على خريطتها.',
   understoodHeading: 'ما فهمناه',
-  chipDepth: (cm) => `عمق الماء نحو ${cm} سم (${inches(cm)} إنش)`,
+  chipDepth: (cm) => `عمق الماء حوالي ${cm} سم (${inches(cm)} إنش)`,
   chipRising: 'الماء يرتفع',
   chipLivingSpace: 'الماء داخل البيت',
   chipBasement: 'في القبو',
   chipCar: 'في سيارة',
   chipTrapped: 'شخص عالق',
   chipMedical: 'يحتاج مساعدة طبية',
-  chipElderly: 'شخص كبير في السن',
+  chipElderly: 'شخص مسنّ',
   chipChildren: 'أطفال',
   chipDisabled: 'شخص من ذوي الإعاقة',
   chipPeople: arabicPeople,
-  done911: 'إذا كانت هناك حياة في خطر، اتصل بـ 911 الآن.',
+  done911: 'إذا كانت حياة أحد في خطر، اتصل بـ 911 فوراً.',
   sendAnother: 'أرسل بلاغاً آخر',
 
   seconds: arabicSeconds,
@@ -324,16 +356,16 @@ const es: Strings = {
   langShort: 'ES',
   langFull: 'Español',
   langSwitcher: 'Idioma',
-  emergency: 'Si hay peligro para la vida, llame al 911',
+  emergency: 'Si una vida está en peligro, llame al 911',
 
   idleTitle: 'Reporte una inundación',
   idleLead: 'Toque el botón rojo y cuéntenos qué pasa, en el idioma que quiera.',
   record: 'Grabar',
   recordAria: 'Empezar a grabar un mensaje de voz',
-  recordHint: 'Diga dónde está, qué tan alta está el agua y quién está con usted.',
+  recordHint: 'Diga dónde está, hasta dónde llega el agua y quién está con usted.',
   typeInstead: 'Prefiero escribir',
 
-  recordingTitle: 'Le escuchamos…',
+  recordingTitle: 'Escuchando…',
   recordingLead: 'Hable ahora. Toque el botón cuando termine.',
   allowMic: 'Permita el micrófono si el teléfono lo pide.',
   stop: 'Detener',
@@ -344,7 +376,7 @@ const es: Strings = {
   reviewTitle: 'Su mensaje de voz está listo',
   reviewLead: 'Escúchelo si quiere y luego envíelo.',
   play: 'Escuchar',
-  pause: 'Pausa',
+  pause: 'Pausar',
   recordAgain: 'Grabar de nuevo',
   addDetails: 'Agregar detalles por escrito',
   detailsLabel: 'Detalles por escrito (opcional)',
@@ -366,13 +398,18 @@ const es: Strings = {
 
   sending: 'Enviando su reporte…',
   sendingLead: 'No cierre esta página.',
+  sendingProgress: (pct) => `${pct}% enviado`,
+  sendingAlmost: 'Ya casi termina…',
+  sendingSlow: 'La conexión está lenta. Seguimos enviando…',
+  stopSending: 'Dejar de enviar',
 
   locating: 'Buscando su ubicación…',
   locFound: (m) => `Ubicación encontrada (±${m} m)`,
   locUnavailable: 'No pudimos obtener su ubicación.',
-  locDenied: 'La ubicación está desactivada para esta página.',
+  locDenied: 'Esta página no tiene permiso para ver su ubicación.',
   locInsecure: 'La ubicación necesita el enlace seguro https.',
   locRetry: 'Reintentar',
+  addAddress: 'Agregar una dirección',
   addressLabel: 'Calle y cruce más cercano',
   addressPlaceholder: 'Ejemplo: Warren Ave y Schaefer Rd',
   addressHint: 'O diga el lugar en su mensaje de voz.',
@@ -384,22 +421,29 @@ const es: Strings = {
   micInsecure:
     'Los mensajes de voz necesitan el enlace seguro que empieza con https://. Escanee el código QR otra vez o escriba su reporte aquí.',
   micFailed: 'La grabación no empezó. Intente de nuevo o escriba su reporte.',
-  micEmpty: 'La grabación quedó vacía. Intente de nuevo con el teléfono más cerca.',
+  micEmpty: 'No se grabó ningún sonido. Intente de nuevo con el teléfono más cerca de la boca.',
+  micInterrupted:
+    'La grabación se detuvo porque se bloqueó la pantalla, se abrió otra aplicación o entró una llamada. Toque Grabar para intentar de nuevo.',
+  micInterruptedKept:
+    'La grabación se detuvo porque se bloqueó la pantalla, se abrió otra aplicación o entró una llamada. Lo que dijo hasta ahora quedó guardado aquí.',
   typeYourReport: 'Escribir mi reporte',
 
-  errNetwork: 'No pudimos conectar con FloodLine. Su reporte sigue aquí. Revise la señal e intente de nuevo.',
-  errTimeout: 'La conexión está muy lenta. Su reporte sigue aquí. Intente de nuevo.',
-  errServer: 'FloodLine no pudo guardar el reporte. Su reporte sigue aquí. Intente de nuevo.',
+  errNetwork: 'No pudimos conectar con FloodLine. Su reporte no se perdió. Revise la señal e intente de nuevo.',
+  errTimeout: 'La conexión está muy lenta. Su reporte no se perdió. Intente de nuevo.',
+  errServer: 'FloodLine no pudo guardar el reporte. Su reporte no se perdió. Intente de nuevo.',
   errTooLarge: 'La foto o la grabación es demasiado grande. Quite la foto e intente de nuevo.',
   errMissing: 'Primero grabe un mensaje de voz o escriba unas palabras.',
+  errOffline: 'Su teléfono no tiene internet. Su reporte no se perdió. Intente de nuevo cuando tenga señal.',
+  errStopped: 'Se detuvo el envío. Su reporte no se perdió. Envíelo cuando esté listo.',
+  offline: 'No hay conexión a internet. Su reporte se quedará aquí hasta que vuelva la señal.',
 
   doneTitle: 'Reporte recibido',
   reportNumber: (id) => `Reporte número ${id}`,
-  understanding: 'Estamos leyendo su reporte…',
+  understanding: 'Estamos procesando su reporte…',
   savedGeneric: 'Su reporte está guardado. Los equipos de rescate ya lo ven en su mapa.',
   understoodHeading: 'Lo que entendimos',
   chipDepth: (cm) => `Agua de unos ${cm} cm (${inches(cm)} pulg.)`,
-  chipRising: 'El agua sube',
+  chipRising: 'El agua está subiendo',
   chipLivingSpace: 'Agua dentro de la casa',
   chipBasement: 'En un sótano',
   chipCar: 'En un carro',
@@ -409,7 +453,7 @@ const es: Strings = {
   chipChildren: 'Niños',
   chipDisabled: 'Persona con discapacidad',
   chipPeople: (n) => `${n} personas`,
-  done911: 'Si hay peligro para la vida, llame al 911 ahora.',
+  done911: 'Si una vida está en peligro, llame al 911 ahora.',
   sendAnother: 'Enviar otro reporte',
 
   seconds: (n) => (n === 1 ? '1 segundo' : `${n} segundos`),

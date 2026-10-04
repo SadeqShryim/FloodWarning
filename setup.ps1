@@ -33,7 +33,8 @@ if (Test-Path $venvPython) {
 }
 
 Step 'Installing Python packages (backend/requirements.txt)'
-& $venvPython -m pip install --disable-pip-version-check -q -r backend\requirements.txt
+# scripts\constraints.txt pins the exact versions the demo was tested with.
+& $venvPython -m pip install --disable-pip-version-check -q -r backend\requirements.txt -c scripts\constraints.txt
 if ($LASTEXITCODE -ne 0) { throw 'pip install failed.' }
 
 # 2. Frontend packages.

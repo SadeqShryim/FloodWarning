@@ -473,9 +473,24 @@
   font-size: 18px;
   color: var(--r-muted);
 }
-.fl-r-locline.is-ok {
+.fl-r-locmsg {
+  display: inline-flex;
+  align-items: center;
+}
+.fl-r-locmsg.is-ok {
   color: var(--r-ok);
   font-weight: 700;
+}
+/* "Add an address": a small secondary action next to the status, never a second big button. */
+.fl-r-locline .fl-r-inline {
+  margin-left: 6px;
+}
+.is-rtl .fl-r-locline .fl-r-inline {
+  margin-left: 0;
+  margin-right: 6px;
+}
+.fl-r-loc > .fl-r-addr {
+  margin-top: 12px;
 }
 .fl-r-locicon {
   flex: none;
@@ -580,9 +595,8 @@
   margin-right: 0;
   margin-left: 16px;
 }
-.is-rtl .fl-r-play svg {
-  transform: scaleX(-1); /* the play triangle points the reading direction */
-}
+/* The play triangle is NOT mirrored in Arabic: media controls keep their LTR shape everywhere
+   (Material and Apple bidi guidelines), and Arabic-speaking users expect the familiar icon. */
 
 .fl-r-playmeta {
   display: flex;
@@ -673,6 +687,44 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.fl-r-progress {
+  height: 12px;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: 6px;
+  background: #d4e3ee;
+  overflow: hidden; /* the bar is a block, so it grows from the reading side: right in Arabic */
+}
+.fl-r-progressbar {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--r-water);
+  transition: width 200ms linear;
+}
+.fl-r-screen > .fl-r-progresstext {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--r-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- offline banner ---------------------------------------------------------------------- */
+
+.fl-r-offline {
+  margin: 0;
+  padding: 10px 16px;
+  background: #fff4d6;
+  color: #5c4300;
+  border-bottom: 1px solid #ecd28a;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
 }
 
 /* ---- confirmation ------------------------------------------------------------------------ */

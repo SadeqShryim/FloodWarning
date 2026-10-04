@@ -316,17 +316,32 @@ def wait_for_health(proc: subprocess.Popen, base: str) -> dict:
     raise SystemExit(f"[run] ERROR: the backend did not answer {base}/api/health within {HEALTH_TIMEOUT_S} s.")
 
 
+def tunnel_command(exe: Path, port: int) -> list[str]:
+    # 127.0.0.1 rather than "localhost": on Windows localhost may resolve to ::1 first,
+    # and uvicorn listens on IPv4 only.
+    return [str(exe), "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate"]
+
+
+# cloudflared logs an ERR line every time a browser closes a request early. The dashboard does that
+# on purpose through a quick tunnel (they do not carry Server-Sent Events, so it drops the stalled
+# stream and polls), which would fill the presenter's console with scary-looking noise.
+_BENIGN_TUNNEL_ERRORS = ("canceled by remote", "context canceled", "Incoming request ended abruptly")
+
+
+def is_tunnel_problem(line: str) -> bool:
+    """True for cloudflared output worth showing: real errors, not clients hanging up."""
+    return " ERR " in line and not any(text in line for text in _BENIGN_TUNNEL_ERRORS)
+
+
 class Tunnel:
     """cloudflared quick tunnel: start it, find the public URL in its output, keep a short log."""
 
-    def __init__(self, exe: Path, port: int) -> None:
+    def __init__(self, cmd: list[str]) -> None:
         self.url: str | None = None
         self.found = threading.Event()
         self.recent: collections.deque[str] = collections.deque(maxlen=25)
-        # 127.0.0.1 rather than "localhost": on Windows localhost may resolve to ::1 first,
-        # and uvicorn listens on IPv4 only.
         self.proc = subprocess.Popen(
-            [str(exe), "tunnel", "--url", f"http://127.0.0.1:{port}", "--no-autoupdate"],
+            cmd,
             cwd=REPO_ROOT,
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             creationflags=_NEW_GROUP,
@@ -342,8 +357,8 @@ class Tunnel:
                 self.url = url
                 self.found.set()
                 return
-        # cloudflared is chatty; only surface its errors (e.g. the connection dropped).
-        if " ERR " in line:
+        # cloudflared is chatty; only surface its real errors (e.g. the connection dropped).
+        if is_tunnel_problem(line):
             say(f"[tunnel] {line}")
 
     def wait_for_url(self, timeout: float) -> str | None:
@@ -356,31 +371,44 @@ class Tunnel:
         return None
 
 
+# Public DNS-over-HTTPS resolvers, asked in turn. Measured on 2026-10-04: a new quick-tunnel name
+# showed up on Google's in ~2.5 s and on Cloudflare's in 6-8 s, but one Cloudflare resolver node
+# kept answering "no such host" for over a minute (it had cached the early miss), so one is not enough.
+_DOH_ENDPOINTS = ("https://dns.google/resolve", "https://cloudflare-dns.com/dns-query")
+
+
+def doh_has_a_record(endpoint: str, host: str) -> bool:
+    """Ask one DoH resolver whether `host` has an A record. Raises on network errors."""
+    request = urllib.request.Request(f"{endpoint}?name={host}&type=A", headers={"accept": "application/dns-json"})
+    with urllib.request.urlopen(request, timeout=4) as response:
+        answer = json.loads(response.read().decode("utf-8")).get("Answer") or []
+    return any(record.get("type") == 1 for record in answer)
+
+
 def wait_for_public_dns(public_url: str, timeout: float = 45) -> bool:
     """Wait until the tunnel's hostname resolves on public DNS. True when it does.
 
-    A new quick-tunnel name takes ~5-15 s to exist in DNS. Resolvers that are asked before that
-    cache "no such host" for about a minute (the zone's negative TTL is 60 s). On venue Wi-Fi every
-    phone shares one resolver, so if this laptop asked it too early, judges' phones would fail too.
-    So we ask Cloudflare's DNS-over-HTTPS service instead, which touches no local cache, and only
-    publish the URL (the QR code) once it answers. If DoH is blocked, fall back to a fixed wait.
+    A new quick-tunnel name takes a few seconds to exist in DNS. Resolvers that are asked before
+    that cache "no such host" for about a minute (the zone's negative TTL is 60 s). On venue Wi-Fi
+    every phone shares one resolver, so if this laptop asked it too early, judges' phones would fail
+    too. So we ask public DNS-over-HTTPS resolvers instead, which touch no local cache, and only
+    publish the URL (the QR code) once one of them answers. If DoH is blocked, use a fixed wait.
     """
     host = public_url.split("://", 1)[1]
-    query = f"https://cloudflare-dns.com/dns-query?name={host}&type=A"
     started = time.monotonic()
     doh_works = False
     while time.monotonic() - started < timeout:
-        try:
-            request = urllib.request.Request(query, headers={"accept": "application/dns-json"})
-            with urllib.request.urlopen(request, timeout=4) as response:
-                answer = json.loads(response.read().decode("utf-8")).get("Answer") or []
+        for endpoint in _DOH_ENDPOINTS:
+            try:
+                found = doh_has_a_record(endpoint, host)
+            except (urllib.error.URLError, OSError, ValueError):
+                continue
             doh_works = True
-            if any(record.get("type") == 1 for record in answer):  # an A record exists
-                time.sleep(2)  # small margin for the other Cloudflare DNS locations
+            if found:
+                time.sleep(2)  # small margin for the other DNS locations
                 return True
-        except (urllib.error.URLError, OSError, ValueError):
-            if not doh_works and time.monotonic() - started > 8:
-                break  # DoH unreachable on this network; use the fixed wait below
+        if not doh_works and time.monotonic() - started > 8:
+            break  # DoH unreachable on this network; use the fixed wait below
         time.sleep(1.5)
     remaining = 20 - (time.monotonic() - started)
     if remaining > 0:
@@ -407,6 +435,94 @@ def check_tunnel_reachable(public_url: str) -> None:
         )
 
     threading.Thread(target=run, daemon=True).start()
+
+
+def set_public_url(base: str, public_url: str | None) -> bool:
+    """Tell the server which address phones use. The dashboard's QR code follows it live."""
+    try:
+        http_json(f"{base}/api/config/public-url", {"public_url": public_url})
+        return True
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        if public_url:
+            say(f"[run] WARNING: could not tell the server its public URL ({exc}). "
+                "Paste it into the dashboard's QR panel instead.")
+        return False
+
+
+class TunnelKeeper:
+    """Keeps a quick tunnel up for the whole demo.
+
+    If cloudflared exits (a network change, a crash, someone closed it), phones lose the server.
+    Instead of leaving the QR code dead until someone notices, open a new tunnel. A quick tunnel's
+    address cannot be kept, so the new one has a new URL: the server gets it, and the dashboard's
+    QR code updates by itself. Failed attempts are retried with a growing pause.
+    """
+
+    RETRY_DELAYS_S = (10, 30, 60)
+
+    def __init__(self, cmd: list[str], base: str) -> None:
+        self.cmd = cmd
+        self.base = base
+        self.tunnel: Tunnel | None = None
+        self.url: str | None = None
+        self.failures = 0
+        self.next_try: float | None = None  # monotonic time of the next attempt, None = not needed
+
+    def open(self) -> str | None:
+        """Start cloudflared and publish its URL once it works. Blocks up to about a minute."""
+        say("[run] Opening a public https tunnel (cloudflared quick tunnel)...")
+        # Assigned before any waiting, so a Ctrl+C in the middle still stops this cloudflared.
+        self.tunnel = Tunnel(self.cmd)
+        url = self.tunnel.wait_for_url(TUNNEL_URL_TIMEOUT_S)
+        if url is None:
+            say("[run] WARNING: cloudflared did not give a public URL. Its last lines:")
+            for line in self.tunnel.recent:
+                say(f"    {line}")
+            stop_process(self.tunnel.proc, "cloudflared", graceful=False)
+            self.tunnel = None
+            self._schedule_retry()
+            return None
+        say(f"[run] Tunnel {url} created; waiting for its address to go live in DNS...")
+        if not wait_for_public_dns(url):
+            say("[run] (could not confirm DNS through cloudflare-dns.com; continuing anyway)")
+        set_public_url(self.base, url)
+        check_tunnel_reachable(url)
+        self.url = url
+        self.failures = 0
+        self.next_try = None
+        return url
+
+    def _schedule_retry(self) -> None:
+        delay = self.RETRY_DELAYS_S[min(self.failures, len(self.RETRY_DELAYS_S) - 1)]
+        self.failures += 1
+        self.next_try = time.monotonic() + delay
+        say(f"[run] Will try to open a tunnel again in {delay} s (the local dashboard keeps working).")
+
+    def tick(self) -> None:
+        """Called from the main loop: notice a dead tunnel and replace it."""
+        if self.tunnel is not None and self.tunnel.proc.poll() is not None:
+            say("[run] WARNING: cloudflared exited; phones cannot reach the server. Its last lines:")
+            for line in list(self.tunnel.recent)[-5:]:
+                say(f"    {line}")
+            self.tunnel = None
+            self.url = None
+            # Take the dead link off the dashboard's QR code right away (it then shows a warning).
+            set_public_url(self.base, None)
+            self.next_try = time.monotonic()  # replace it now
+        if self.tunnel is None and self.next_try is not None and time.monotonic() >= self.next_try:
+            url = self.open()
+            if url:
+                say("")
+                say("=" * 72)
+                say(f"  NEW phone link (the dashboard QR code has updated): {url}/report")
+                say("  Phones that had the old page open must scan the QR code again.")
+                say("=" * 72)
+                say("")
+
+    def stop(self) -> None:
+        if self.tunnel is not None:
+            stop_process(self.tunnel.proc, "cloudflared", graceful=False)
+            self.tunnel = None
 
 
 def banner(port: int, public_url: str | None, health: dict, tunnel_note: str | None) -> None:
@@ -468,7 +584,7 @@ def main() -> int:
 
     base = f"http://127.0.0.1:{args.port}"
     backend: subprocess.Popen | None = None
-    tunnel: Tunnel | None = None
+    keeper: TunnelKeeper | None = None
     try:
         say(f"[run] Starting the server on port {args.port}...")
         backend = start_backend(args.port)
@@ -483,26 +599,10 @@ def main() -> int:
             say("[run] WARNING: cloudflared not found. Run scripts\\get_cloudflared.ps1 to let phones connect.")
         else:
             exe = CLOUDFLARED if CLOUDFLARED.exists() else Path(shutil.which("cloudflared") or "cloudflared")
-            say("[run] Opening a public https tunnel (cloudflared quick tunnel)...")
-            tunnel = Tunnel(exe, args.port)
-            public_url = tunnel.wait_for_url(TUNNEL_URL_TIMEOUT_S)
+            keeper = TunnelKeeper(tunnel_command(exe, args.port), base)
+            public_url = keeper.open()
             if public_url is None:
-                tunnel_note = "tunnel failed"
-                say("[run] WARNING: cloudflared did not give a public URL. Its last lines:")
-                for line in tunnel.recent:
-                    say(f"    {line}")
-                stop_process(tunnel.proc, "cloudflared", graceful=False)
-                tunnel = None
-            else:
-                say(f"[run] Tunnel {public_url} created; waiting for its address to go live in DNS...")
-                if not wait_for_public_dns(public_url):
-                    say("[run] (could not confirm DNS through cloudflare-dns.com; continuing anyway)")
-                try:
-                    http_json(f"{base}/api/config/public-url", {"public_url": public_url})
-                except (urllib.error.URLError, OSError, ValueError) as exc:
-                    say(f"[run] WARNING: could not tell the server its public URL ({exc}). "
-                        "Paste it into the dashboard's QR panel instead.")
-                check_tunnel_reachable(public_url)
+                tunnel_note = "tunnel failed; retrying in the background"
 
         banner(args.port, public_url, health, tunnel_note)
         if args.open:
@@ -515,16 +615,8 @@ def main() -> int:
                 time.sleep(0.3)
                 say(f"[run] ERROR: the server stopped unexpectedly (exit code {code}).")
                 return code or 1
-            if tunnel is not None and tunnel.proc.poll() is not None:
-                say("[run] WARNING: cloudflared exited; phones can no longer connect. Local dashboard still works.")
-                for line in list(tunnel.recent)[-5:]:
-                    say(f"    {line}")
-                tunnel = None
-                # Take the dead link off the dashboard's QR code (it then asks for a URL instead).
-                try:
-                    http_json(f"{base}/api/config/public-url", {"public_url": None})
-                except (urllib.error.URLError, OSError, ValueError):
-                    pass
+            if keeper is not None:
+                keeper.tick()
             time.sleep(0.5)
     except KeyboardInterrupt:
         say("\n[run] Stopping...")
@@ -541,8 +633,8 @@ def main() -> int:
         if hasattr(signal, "SIGBREAK"):
             signal.signal(signal.SIGBREAK, signal.SIG_IGN)
         # Tunnel first so phones stop hitting a server that is shutting down.
-        if tunnel is not None:
-            stop_process(tunnel.proc, "cloudflared", graceful=False)
+        if keeper is not None:
+            keeper.stop()
         stop_process(backend, "server", graceful=True)
 
 

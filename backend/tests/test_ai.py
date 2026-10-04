@@ -27,9 +27,13 @@ GOOD = {
 }
 
 
-def api_error(code: int, status: str, message: str = "boom") -> errors.APIError:
+def api_error(code: int, status: str, message: str = "boom", details: list | None = None) -> errors.APIError:
+    """A real SDK exception, built the way google-genai builds it from the error JSON body."""
     cls = errors.ServerError if code >= 500 else errors.ClientError
-    return cls(code, {"error": {"code": code, "status": status, "message": message}})
+    body = {"error": {"code": code, "status": status, "message": message}}
+    if details is not None:
+        body["error"]["details"] = details
+    return cls(code, body)
 
 
 class FakeModels:
@@ -58,7 +62,9 @@ def fake(monkeypatch):
     monkeypatch.setattr(config, "AI_TIMEOUT_S", 5.0)
     monkeypatch.setattr(ai, "_last_model", None)
     monkeypatch.setattr(ai, "_unavailable", set())
-    monkeypatch.setattr(ai, "_no_thinking", set())
+    monkeypatch.setattr(ai, "_cooldown", {})
+    monkeypatch.setattr(ai, "_thinking_step", {})
+    monkeypatch.setattr(ai, "_state_key", "test-key")
 
     holder = {}
 
@@ -94,8 +100,8 @@ def test_chain_moves_on_for_404_and_429_and_remembers_the_answering_model(fake):
     assert ai.active_model() == "gemini-flash-latest"
     assert extraction.people_at_risk.trapped is True
     assert latency_ms >= 0
-    # The 404 model is tried last next time; the 429 one keeps its place (quota comes back).
-    assert ai.model_chain() == ["gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"]
+    # The 404 model is skipped from now on; the 429 one sits out its cooldown (quota comes back).
+    assert ai.model_chain() == ["gemini-flash-latest"]
 
 
 def test_chain_moves_on_for_503(fake):
@@ -119,32 +125,66 @@ def test_all_models_missing_raises_model_unavailable(fake):
         run_extract()
 
 
-def test_thinking_config_rejection_retries_once_without_it(fake):
+def test_thinking_config_rejection_moves_to_the_next_setting(fake):
     models = fake({"gemini-2.5-flash": [api_error(400, "INVALID_ARGUMENT", "thinking budget not supported"),
                                          json.dumps(GOOD)]})
     _, engine, _ = run_extract()
     assert engine == "gemini-2.5-flash"
     first, second = models.calls[0][1], models.calls[1][1]
     assert first.thinking_config.thinking_budget == 0
-    assert second.thinking_config is None
-    # Remembered: the next call does not send it again.
-    assert ai._thinking_config("gemini-2.5-flash") is None
+    assert second.thinking_config.thinking_level.value == "LOW" and second.thinking_config.thinking_budget is None
+    # Remembered: the next call starts with the setting that worked.
+    assert ai._thinking_config("gemini-2.5-flash").thinking_level.value == "LOW"
 
 
-def test_other_400_is_a_short_error_not_a_retry(fake):
-    models = fake({"gemini-2.5-flash": [api_error(400, "INVALID_ARGUMENT", "x"), api_error(400, "INVALID_ARGUMENT", "audio broken")]})
-    with pytest.raises(ai.AIError, match=r"^error: 400"):
+def test_thinking_level_minimal_rejected_by_newest_flash_falls_back(fake, monkeypatch):
+    # gemini-3.8-flash: "minimal is not supported and returns an error" (ai.google.dev, Oct 2026).
+    monkeypatch.setattr(config, "GEMINI_MODEL", "gemini-3.5-flash")
+    monkeypatch.setattr(config, "GEMINI_FALLBACK_MODELS", [])
+    models = fake({"gemini-3.5-flash": [
+        api_error(400, "INVALID_ARGUMENT", "Thinking level MINIMAL is not supported for this model."),
+        api_error(400, "INVALID_ARGUMENT", "Thinking level LOW is not supported for this model."),
+        json.dumps(GOOD),
+    ]})
+    _, engine, _ = run_extract()
+    assert engine == "gemini-3.5-flash"
+    sent = [cfg.thinking_config for _, cfg in models.calls]
+    assert sent[0].thinking_level.value == "MINIMAL" and sent[1].thinking_level.value == "LOW" and sent[2] is None
+
+
+def test_other_400_moves_on_and_reports_the_error(fake):
+    models = fake({m: [api_error(400, "INVALID_ARGUMENT", "audio broken")] for m in
+                   ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"]})
+    with pytest.raises(ai.AIError, match=r"^error: 400 audio broken"):
         run_extract()
-    assert len(models.calls) == 2  # with thinking, then once without; no other models
+    # One request per model; "audio broken" is not about thinking, so no thinking retries.
+    assert [m for m, _ in models.calls] == ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+    assert ai._thinking_step == {}
 
 
 def test_thinking_config_per_model_family():
     assert ai._thinking_config("gemini-2.5-flash").thinking_budget == 0
     assert ai._thinking_config("gemini-2.5-flash-lite").thinking_budget == 0
+    assert ai._thinking_config("gemini-3-flash-preview").thinking_level.value == "MINIMAL"
     assert ai._thinking_config("gemini-3.5-flash").thinking_level.value == "MINIMAL"
-    assert ai._thinking_config("gemini-flash-latest").thinking_level.value == "MINIMAL"
+    assert ai._thinking_config("gemini-3.5-flash-lite").thinking_level.value == "MINIMAL"
+    assert ai._thinking_config("gemini-flash-lite-latest").thinking_level.value == "MINIMAL"
+    # 3.7/3.8 Flash reject "minimal"; the -latest alias follows the newest Flash.
+    assert ai._thinking_config("gemini-3.8-flash").thinking_level.value == "LOW"
+    assert ai._thinking_config("gemini-3.7-flash").thinking_level.value == "LOW"
+    assert ai._thinking_config("gemini-flash-latest").thinking_level.value == "LOW"
+    assert ai._thinking_config("gemini-3.1-pro-preview").thinking_level.value == "LOW"
     assert ai._thinking_config("gemini-2.0-flash") is None
-    assert ai._thinking_config("gemini-3.1-pro-preview") is None
+    # Never both fields at once (that is a 400).
+    for model in ("gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"):
+        for option in ai._thinking_options(model):
+            assert option is None or option.thinking_budget is None or option.thinking_level is None
+
+
+def test_temperature_only_for_gemini_2(fake):
+    assert ai._temperature("gemini-2.5-flash") == 0.2
+    assert ai._temperature("gemini-flash-latest") is None
+    assert ai._temperature("gemini-3.8-flash") is None
 
 
 def test_timeout_raises_timeout(fake, monkeypatch):
@@ -160,9 +200,16 @@ def test_timeout_raises_timeout(fake, monkeypatch):
 
 @pytest.mark.parametrize("raw", ["not json at all", "[1, 2]", "", "   "])
 def test_bad_output_raises(fake, raw):
-    fake({"gemini-2.5-flash": [raw]})
+    models = fake({m: [raw] for m in ai.model_chain()})
     with pytest.raises(ai.AIError, match="^bad output$"):
         run_extract()
+    assert len(models.calls) == 3  # every model got its chance
+
+
+def test_bad_output_from_one_model_lets_the_next_answer(fake):
+    fake({"gemini-2.5-flash": ['{"transcript_original": "cut off'], "gemini-2.5-flash-lite": [json.dumps(GOOD)]})
+    extraction, engine, _ = run_extract()
+    assert engine == "gemini-2.5-flash-lite" and extraction.people_at_risk.elderly is True
 
 
 def test_not_configured(monkeypatch):
@@ -173,9 +220,19 @@ def test_not_configured(monkeypatch):
         run_extract()
 
 
+def test_network_error_moves_on_then_reports_network(fake):
+    fake({"gemini-2.5-flash": [ConnectionError("network down")], "gemini-2.5-flash-lite": [json.dumps(GOOD)]})
+    _, engine, _ = run_extract()
+    assert engine == "gemini-2.5-flash-lite"
+
+    fake({m: [ConnectionError("network down")] for m in ai.model_chain()})
+    with pytest.raises(ai.AIError, match=r"^error: network [(]ConnectionError[)]"):
+        run_extract()
+
+
 def test_unexpected_exception_becomes_short_error(fake):
-    fake({"gemini-2.5-flash": [ConnectionError("network down")]})
-    with pytest.raises(ai.AIError, match="^error: ConnectionError"):
+    fake({"gemini-2.5-flash": [ValueError("sdk surprise")]})
+    with pytest.raises(ai.AIError, match="^error: ValueError"):
         run_extract()
 
 
