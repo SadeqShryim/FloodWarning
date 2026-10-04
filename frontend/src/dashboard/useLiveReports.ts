@@ -69,7 +69,7 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
   const [flashes, setFlashes] = useState<Map<number, Flash>>(() => new Map())
   const [subscription, setSubscription] = useState(0) // bump to re-open the event stream
   const [offline, setOffline] = useState(false)
-  const lastSnapshotAt = useRef(Date.now())
+  const lastSnapshotAt = useRef(0)
 
   // The ref is the source of truth for diffing; state mirrors it for rendering. Doing the diff
   // outside setState keeps side effects (toasts) from running twice under StrictMode.
@@ -219,15 +219,16 @@ export function useLiveReports({ onCritical }: Options = {}): LiveReports {
 
   // While polling, notice when the polls stop reaching the server.
   useEffect(() => {
-    if (status !== 'polling') {
-      setOffline(false)
-      return
-    }
+    if (status !== 'polling') return
+    // Grace period: the first poll fires right away, so give it a few seconds before judging.
     lastSnapshotAt.current = Math.max(lastSnapshotAt.current, Date.now() - 3000)
     const id = window.setInterval(() => {
       setOffline(Date.now() - lastSnapshotAt.current > OFFLINE_AFTER_MS)
     }, 1000)
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearInterval(id)
+      setOffline(false)
+    }
   }, [status])
 
   const sorted = useMemo(() => Array.from(reports.values()).sort(compareReports), [reports])

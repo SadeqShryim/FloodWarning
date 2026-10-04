@@ -52,6 +52,15 @@ function useAlertSound(enabled: boolean) {
       }
     }
     void ctxRef.current?.resume().catch(() => undefined)
+    if (!enabled) return
+    // Turned on in an earlier visit: the browser keeps audio suspended until the first click or key.
+    const wake = () => void ctxRef.current?.resume().catch(() => undefined)
+    window.addEventListener('pointerdown', wake)
+    window.addEventListener('keydown', wake)
+    return () => {
+      window.removeEventListener('pointerdown', wake)
+      window.removeEventListener('keydown', wake)
+    }
   }, [enabled])
   useEffect(() => () => void ctxRef.current?.close().catch(() => undefined), [])
 
