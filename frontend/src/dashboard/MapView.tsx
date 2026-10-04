@@ -9,6 +9,7 @@ import { hasCoords, isPending, needsReview, placeLabel, reportColor } from './fo
 
 const PIN_SIZE = { CRITICAL: 26, HIGH: 21, MEDIUM: 17, LOW: 15 } as const
 const PENDING_SIZE = 19
+const METERS_PER_DEGREE_LAT = 111_320
 
 interface PinLook {
   color: string
@@ -117,6 +118,10 @@ interface HotspotProps {
 function HotspotCircle({ hotspot, onFocus }: HotspotProps) {
   const color = LEVEL_COLOR[hotspot.level]
   const handlers = useMemo(() => ({ click: () => onFocus(hotspot) }), [hotspot, onFocus])
+  const labelAt = useMemo<[number, number]>(
+    () => [hotspot.lat + hotspot.radius_m / METERS_PER_DEGREE_LAT, hotspot.lng],
+    [hotspot.lat, hotspot.lng, hotspot.radius_m],
+  )
   return (
     <Circle
       center={[hotspot.lat, hotspot.lng]}
@@ -124,8 +129,17 @@ function HotspotCircle({ hotspot, onFocus }: HotspotProps) {
       pathOptions={{ color, weight: 1.5, opacity: 0.9, dashArray: '6 6', fillColor: color, fillOpacity: 0.1 }}
       eventHandlers={handlers}
     >
-      {/* The label is clickable too: it is the most visible part of a hotspot. */}
-      <Tooltip permanent direction="top" offset={[0, -6]} className="fl-hotspot-label" interactive eventHandlers={handlers}>
+      {/* The label is clickable too: it is the most visible part of a hotspot. It sits on the
+          circle's top edge rather than its center, so it never covers the urgent pins inside. */}
+      <Tooltip
+        permanent
+        position={labelAt}
+        direction="top"
+        offset={[0, -2]}
+        className="fl-hotspot-label"
+        interactive
+        eventHandlers={handlers}
+      >
         <span className="fl-hotspot-name">{hotspot.label}</span>
         <span className="fl-hotspot-count">
           {hotspot.report_ids.length} {hotspot.report_ids.length === 1 ? 'report' : 'reports'}

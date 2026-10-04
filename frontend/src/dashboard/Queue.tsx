@@ -18,6 +18,7 @@ export type QueueFilter = 'open' | 'all'
 
 // The gauge on each card's edge fills like a staff gauge: full at 1.5 m of water.
 const GAUGE_FULL_CM = 150
+const FLIP_MS = 420
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -124,6 +125,7 @@ interface QueueProps {
 export default function Queue({ reports, selectedId, flashes, now, filter, onFilter, openCount, onSelect, covered = false }: QueueProps) {
   const listRef = useRef<HTMLOListElement>(null)
   const lastTops = useRef<Map<number, number>>(new Map())
+  const glidingUntil = useRef<Map<number, number>>(new Map())
 
   const visible = filter === 'open' ? reports.filter((r) => r.status === 'new') : reports
   const order = visible.map((r) => r.id).join(',')
@@ -135,25 +137,36 @@ export default function Queue({ reports, selectedId, flashes, now, filter, onFil
     const moved: HTMLElement[] = []
     const tops = new Map<number, number>()
     const cards = listRef.current ? Array.from(listRef.current.children) : []
+    const now = performance.now()
+    const gliding = glidingUntil.current
     for (const card of cards) {
       const el = card as HTMLElement
       const id = Number(el.dataset.cardId)
       if (!Number.isFinite(id)) continue
       const top = el.offsetTop
       tops.set(id, top)
-      const before = lastTops.current.get(id)
-      if (reduce || before === undefined || before === top) continue
+      let before = lastTops.current.get(id)
+      if (reduce || before === undefined) continue
+      // In a fast storm the order can change again while a card is still gliding: start from where
+      // it is on screen right now (its in-flight transform), not from its old slot, so it never jumps.
+      if ((gliding.get(id) ?? 0) > now) {
+        const transform = getComputedStyle(el).transform
+        if (transform && transform !== 'none') before += new DOMMatrixReadOnly(transform).m42
+      }
+      if (Math.abs(before - top) < 0.5) continue
       el.style.transition = 'none'
       el.style.transform = `translateY(${before - top}px)`
+      gliding.set(id, now + FLIP_MS + 50)
       moved.push(el)
     }
+    for (const [id, until] of gliding) if (until <= now || !tops.has(id)) gliding.delete(id)
     lastTops.current = tops
     if (moved.length === 0) return
     // Force a layout so the inverted position sticks before transitioning back to zero.
     void listRef.current?.offsetHeight
     const frame = requestAnimationFrame(() => {
       for (const el of moved) {
-        el.style.transition = 'transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1)'
+        el.style.transition = `transform ${FLIP_MS}ms cubic-bezier(0.2, 0.7, 0.2, 1)`
         el.style.transform = ''
       }
     })
