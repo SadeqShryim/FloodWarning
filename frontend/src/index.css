@@ -1,0 +1,56 @@
+/* Global reset and shared tokens. Screen styles live in report/ and dashboard/ (scoped by root class). */
+:root {
+  --fl-critical: #e5484d;
+  --fl-high: #f76b15;
+  --fl-medium: #f5b70a;
+  --fl-low: #3e8ef7;
+  --fl-pending: #8b95a7;
+  --fl-ink: #0b1220;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Arabic', Tahoma, sans-serif;
+  line-height: 1.4;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
+}
+
+.fl-boot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fl-pending);
+}
+
+.fl-missing {
+  padding: 24px;
+}

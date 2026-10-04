@@ -1,0 +1,30 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime data: SQLite DB, uploaded voice notes and photos, geocode cache
+data/
+data-*/
+
+# Secrets
+.env
+
+# Binaries downloaded by setup (cloudflared)
+tools/
+
+# Frontend build output and deps
+frontend/node_modules/
+frontend/dist/
+
+# Team-internal notes (shared out of band, not in the public repo)
+CLAUDE.md
+TASKS.md
+docs/internal/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
