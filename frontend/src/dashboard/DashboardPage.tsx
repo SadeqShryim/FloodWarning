@@ -51,6 +51,26 @@ function useDashboardFont() {
   }, [])
 }
 
+/**
+ * Padding for fitting a hotspot into the part of the map the floating panels leave clear: right of
+ * the sitrep (bottom left) and below the QR code (top right). Falls back to plain padding when the
+ * panels leave too little room (small screens).
+ */
+function clearAreaPadding(map: L.Map): Pick<L.FitBoundsOptions, 'paddingTopLeft' | 'paddingBottomRight'> {
+  const box = map.getContainer().getBoundingClientRect()
+  const gap = 24
+  let left = 64
+  let top = 64
+  const sitrep = document.querySelector('.fl-sitrep')?.getBoundingClientRect()
+  if (sitrep) left = Math.max(left, sitrep.right - box.left + gap)
+  const qr = document.querySelector('.fl-qr')?.getBoundingClientRect()
+  if (qr) top = Math.max(top, qr.bottom - box.top + gap)
+  if (box.width - left - 64 < 200 || box.height - top - 64 < 160) {
+    return { paddingTopLeft: [64, 64], paddingBottomRight: [64, 64] }
+  }
+  return { paddingTopLeft: [left, top], paddingBottomRight: [64, 64] }
+}
+
 function errorText(err: unknown, action: string): string {
   return err instanceof Error ? `${action}: ${err.message}` : `${action}.`
 }
@@ -95,6 +115,7 @@ export default function DashboardPage() {
     setShownEpoch(epoch)
     setSelectedId(null)
     setBriefing(null)
+    setSitrepOpen(false)
     setToasts([])
   }
 
@@ -195,7 +216,7 @@ export default function DashboardPage() {
         points.length >= 2
           ? L.latLngBounds(points)
           : L.latLng(hotspot.lat, hotspot.lng).toBounds(Math.max(hotspot.radius_m, 250) * 2)
-      map.flyToBounds(bounds, { padding: [64, 64], maxZoom: 16, duration: prefersReducedMotion() ? 0 : 0.7 })
+      map.flyToBounds(bounds, { ...clearAreaPadding(map), maxZoom: 16, duration: prefersReducedMotion() ? 0 : 0.7 })
     },
     [map],
   )

@@ -86,6 +86,13 @@ def test_template_briefing_mentions_the_essentials():
     assert 3 <= text.count(". ") + 1 <= 6
 
 
+def test_template_keeps_the_case_of_ai():
+    # Regression: str.capitalize() on the closing sentence turned "AI" into "ai".
+    reports = sample() + [report(11, "MEDIUM", 42.31, -83.21, ai_status="failed", address="Ford Rd & Chase Rd")]
+    text = briefing.template_briefing(reports, briefing.compute_hotspots(reports))
+    assert "1 needs human review because the AI could not process it and 1 is still being processed." in text
+
+
 def test_template_with_nothing_open():
     text = briefing.template_briefing([report(1, "LOW", 42.3, -83.2, status="resolved")], [])
     assert text.startswith("No open reports")

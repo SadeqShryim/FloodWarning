@@ -190,7 +190,9 @@ def template_briefing(reports: list[dict], hotspots: list[dict]) -> str:
         n = c["pending"]
         extra.append(f"{n} {'is' if n == 1 else 'are'} still being processed")
     if extra:
-        sentences.append(" and ".join(extra).capitalize() + ".")
+        # Upper-case only the first letter: str.capitalize() would also turn "AI" into "ai".
+        joined = " and ".join(extra)
+        sentences.append(joined[:1].upper() + joined[1:] + ".")
     return " ".join(sentences[:5])
 
 

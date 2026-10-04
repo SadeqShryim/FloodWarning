@@ -42,6 +42,7 @@ export default function SitrepPanel({ briefing, busy, error, onRefresh, onClose,
         </p>
       )}
       {!briefing && busy && <p className="fl-muted">Reading every open report and looking for clusters...</p>}
+      {!briefing && !busy && !error && <p className="fl-muted">No sitrep yet. Press Refresh to write one.</p>}
 
       {briefing && (
         <>

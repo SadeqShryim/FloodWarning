@@ -1,7 +1,7 @@
 // The hero: a dark OpenStreetMap with one pin per located report and the latest sitrep hotspots.
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { Circle, MapContainer, Marker, TileLayer, Tooltip } from 'react-leaflet'
 import type { Hotspot, Report } from '../types'
 import { LEVEL_COLOR, LEVEL_RANK } from '../types'
@@ -83,8 +83,21 @@ const Pin = memo(function Pin({ report, selected, onSelect }: PinProps) {
   const title = isPending(report)
     ? `#${report.id} processing`
     : `#${report.id} ${report.urgency_level ?? ''}: ${report.ai_summary ?? placeLabel(report)}`
+
+  // Leaflet applies `title` only when it first builds the marker element, and setIcon reuses a
+  // divIcon's element, so a pin created while "processing" would keep that hover text forever.
+  const markerRef = useRef<L.Marker | null>(null)
+  useEffect(() => {
+    const marker = markerRef.current
+    if (!marker) return
+    marker.options.title = title
+    const el = marker.getElement()
+    if (el) el.title = title
+  }, [title])
+
   return (
     <Marker
+      ref={markerRef}
       position={[report.lat, report.lng]}
       icon={icon}
       zIndexOffset={zIndexFor(report, selected)}
