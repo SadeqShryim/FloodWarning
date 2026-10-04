@@ -1,8 +1,13 @@
-"""Shared fixtures for the backend-core tests (test_api.py, test_db_events.py).
+"""Shared fixtures for the backend tests.
 
-Every test gets its own data directory under tmp_path and fakes for everything that would
-touch the network or depend on other modules' current behavior (AI, geocoding, urgency rules,
-seed data). Tests that need specific behavior monkeypatch those fakes again.
+For EVERY test in the suite (autouse): the Gemini key from .env / the environment is hidden and
+connections that leave the machine fail, so adding a real key never makes the suite spend quota.
+A test can opt out with @pytest.mark.real_gemini_key (none in the normal suite does).
+
+For the backend-core tests (test_api.py, test_db_events.py, test_backend_*.py): app_env gives each
+test its own data directory under tmp_path and fakes for everything that would touch the network
+or depend on other modules' current behavior (AI, geocoding, urgency rules, seed data). Tests that
+need specific behavior monkeypatch those fakes again.
 """
 from __future__ import annotations
 

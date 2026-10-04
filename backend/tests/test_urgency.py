@@ -267,6 +267,19 @@ def test_failed_with_nothing_extracted_voice_and_text():
                                    "urgency_reasons": ["needs review", "typed report"]}
 
 
+def test_failed_never_says_info_only():
+    """A failed report with a hazard the rules do not rank (electrical, but no water found) is shown
+    as MEDIUM "needs review"; an "info only" chip next to that would read as a contradiction."""
+    sparks = row(ai_status="failed", input_type="text", hazards={"electrical": True})
+    result = score_report(sparks)
+    assert result["urgency_level"] == "MEDIUM"
+    assert result["urgency_reasons"] == ["needs review", "typed report"]
+    voice = score_report(row(ai_status="failed", input_type="voice", hazards={"electrical": True}))
+    assert voice["urgency_reasons"] == ["needs review", "voice note"]
+    done = score_report(row(ai_status="done", hazards={"electrical": True}))
+    assert done["urgency_reasons"] == ["info only"]  # a verified LOW report keeps it
+
+
 def test_failed_puts_needs_review_first_and_never_below_medium():
     low = score_report(row(ai_status="failed", location_type="street", water_depth_cm=10))
     assert low["urgency_level"] == "MEDIUM"

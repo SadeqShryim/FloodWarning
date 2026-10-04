@@ -22,7 +22,8 @@ Rules (first matching level wins; "vulnerable" = elderly, disabled or children;
                       M2 home or car with standing water
     LOW       5-34    everything else (street flooding, information only)
 
-    AI failed: "needs review" goes first and the level is never below MEDIUM (score >= 50).
+    AI failed: "needs review" goes first and the level is never below MEDIUM (score >= 50);
+    "info only" is never shown next to it (the input kind, "voice note" or "typed report", instead).
     Nothing extracted at all: MEDIUM 50, ["needs review", "voice note" | "typed report"].
     Pending (AI still running): no score, no level, no reasons.
 
@@ -201,7 +202,9 @@ def score_report(report: Mapping[str, Any]) -> dict:
         reasons += chips
     reasons += supporting
     if level == "LOW" and not supporting:
-        reasons.append("info only")
+        # "info only" would contradict "needs review" on an unverified report (shown as MEDIUM):
+        # say what a responder should check instead, as in the nothing-extracted case.
+        reasons.append(("typed report" if report.get("input_type") == "text" else "voice note") if failed else "info only")
     reasons = list(dict.fromkeys(reasons))[:MAX_REASONS]  # dedupe, keep first occurrence
 
     # An unverified report must not sink: failed reports are at least MEDIUM.
