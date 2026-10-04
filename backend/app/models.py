@@ -64,7 +64,7 @@ class Report(BaseModel):
 
     id: int
     created_at: str  # ISO 8601, UTC, e.g. "2026-10-04T15:04:05Z"
-    updated_at: str
+    updated_at: str  # same, with milliseconds after an update ("...05.123Z"); strictly increasing per write
     lat: Optional[float] = None
     lng: Optional[float] = None
     accuracy_m: Optional[float] = None

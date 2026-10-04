@@ -38,13 +38,15 @@ interface Options {
 
 const FLASH_MS = 2400
 
-// What the queue shows changing. updated_at alone is not enough: it has one-second precision,
-// so "created" and "AI done" can carry the same timestamp.
+// What the queue shows changing. updated_at is part of it, but a fresh insert carries
+// updated_at == created_at (whole seconds), so the visible fields are compared too.
 function signature(r: Report): string {
   return [r.updated_at, r.status, r.ai_status, r.urgency_level, r.urgency_score, r.address_text].join('|')
 }
 
-// Never let an older copy (a poll that raced an SSE event) overwrite a newer one.
+// Never let an older copy (an action's HTTP response or a poll that raced an SSE event) overwrite a
+// newer one. The server gives every update its own millisecond updated_at, strictly increasing, so
+// this orders even a "pending" write and the "AI failed" write that follows it a moment later.
 function isStale(incoming: Report, current: Report | undefined): boolean {
   return !!current && Date.parse(incoming.updated_at) < Date.parse(current.updated_at)
 }

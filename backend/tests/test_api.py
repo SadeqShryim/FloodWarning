@@ -14,7 +14,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
-from app import ai, briefing, config, db, fallback_rules, geocode, main, seed_data, storm
+from app import ai, briefing, config, db, fallback_rules, geocode, main, seed_data, storm, util
 from app.events import broker
 from conftest import make_extraction, wait_for_report
 
@@ -414,6 +414,20 @@ def test_reprocess_reruns_the_ai(client: TestClient, monkeypatch: pytest.MonkeyP
     assert done["ai_status"] == "done" and done["ai_engine"] == "gemini-2.5-flash"
     assert [e["type"] for e in published] == ["report.updated", "report.updated"]
     assert client.post("/api/reports/999/reprocess").status_code == 404
+
+
+def test_reprocess_without_ai_orders_its_versions(client: TestClient, published: list[dict]) -> None:
+    # With the AI off, "pending" and "failed" are written a moment apart, and the "failed" event
+    # can reach a dashboard before the reprocess response (the "pending" copy) does. The dashboard
+    # keeps the copy with the newest updated_at, so the final row must carry a strictly later one.
+    report = post_voice(client).json()
+    published.clear()
+    pending = client.post(f"/api/reports/{report['id']}/reprocess").json()
+    final = wait_for_report(client, report["id"], lambda r: r["ai_status"] != "pending")
+    assert pending["ai_status"] == "pending" and final["ai_status"] == "failed"
+    assert util.parse_iso(final["updated_at"]) > util.parse_iso(pending["updated_at"])
+    stamps = [util.parse_iso(e["report"]["updated_at"]) for e in published if e["type"] == "report.updated"]
+    assert len(stamps) == 2 and stamps[0] < stamps[1]
 
 
 def test_reports_come_back_in_queue_order(client: TestClient) -> None:

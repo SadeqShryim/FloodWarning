@@ -34,7 +34,7 @@ export interface Needs {
 export interface Report {
   id: number
   created_at: string // ISO 8601, UTC
-  updated_at: string
+  updated_at: string // ISO 8601, UTC; milliseconds after an update, strictly increasing (orders versions)
   lat: number | null
   lng: number | null
   accuracy_m: number | null

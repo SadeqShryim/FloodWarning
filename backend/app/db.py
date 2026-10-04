@@ -10,12 +10,13 @@ import json
 import logging
 import sqlite3
 import threading
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from . import config
-from .util import utc_now_iso
+from .util import ms_to_iso, utc_now_iso
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +94,24 @@ SCALAR_DEFAULTS: dict[str, Any] = {
 _lock = threading.RLock()  # sqlite3 objects are not safe to share across threads without one
 _conn: sqlite3.Connection | None = None
 _conn_path: Path | None = None
+_last_write_ms = 0  # newest updated_at handed out, in epoch milliseconds (see _write_stamp)
+
+
+def _now_ms() -> int:
+    return time.time_ns() // 1_000_000
+
+
+def _write_stamp() -> str:
+    """updated_at for an update: milliseconds, and strictly later than any earlier update.
+
+    Dashboards keep the newest copy of a report by comparing updated_at, and a live event and an
+    HTTP response can arrive in either order. Second precision cannot order a "pending" write and
+    the "AI failed" write that lands a few milliseconds later, so every write gets its own instant.
+    Call with _lock held.
+    """
+    global _last_write_ms
+    _last_write_ms = max(_now_ms(), _last_write_ms + 1)
+    return ms_to_iso(_last_write_ms)
 
 
 # ---------------------------------------------------------------- normalization
@@ -283,9 +302,9 @@ def update_report(report_id: int, fields: dict) -> dict | None:
     """Set the given columns (plus updated_at). Returns the updated row dict, or None if there is no such report."""
     changes = {name: _encode(name, value) for name, value in fields.items() if name in COLUMN_NAMES}
     changes.pop("created_at", None)
-    changes["updated_at"] = utc_now_iso()
-    assignments = ", ".join(f"{name} = ?" for name in changes)
     with _lock:
+        changes["updated_at"] = _write_stamp()
+        assignments = ", ".join(f"{name} = ?" for name in changes)
         conn = _connection()
         cursor = conn.execute(f"UPDATE reports SET {assignments} WHERE id = ?", [*changes.values(), report_id])
         conn.commit()

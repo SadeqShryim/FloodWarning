@@ -16,6 +16,12 @@ def utc_now_iso() -> str:
     return to_iso(datetime.now(timezone.utc))
 
 
+def ms_to_iso(epoch_ms: int) -> str:
+    """UTC ISO 8601 with milliseconds and a Z suffix, e.g. 2026-10-04T15:04:05.123Z."""
+    seconds, millis = divmod(int(epoch_ms), 1000)
+    return to_iso(datetime.fromtimestamp(seconds, timezone.utc))[:-1] + f".{millis:03d}Z"
+
+
 def parse_iso(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 

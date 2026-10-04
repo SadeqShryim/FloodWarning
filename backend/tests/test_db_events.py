@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from app import ai, config, db, fallback_rules, seed_data, service, urgency
+from app import ai, config, db, fallback_rules, seed_data, service, urgency, util
 from app.events import Broker
 from conftest import fake_score
 
@@ -58,15 +58,31 @@ def test_insert_keeps_given_timestamps(db_env: Any) -> None:
 def test_update_sets_updated_at_and_handles_missing(db_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(db, "utc_now_iso", lambda: "2026-10-04T10:00:00Z")
     db.insert_report({"status": "new"})
-    monkeypatch.setattr(db, "utc_now_iso", lambda: "2026-10-04T10:05:00Z")
+    monkeypatch.setattr(db, "_last_write_ms", 0)
+    monkeypatch.setattr(db, "_now_ms", lambda: 1_791_108_300_250)  # 2026-10-04T10:05:00.250Z
     updated = db.update_report(1, {"status": "dispatched", "needs": {"pumping": True}, "id": 7, "bogus": 1})
     assert updated is not None
     assert updated["id"] == 1
     assert updated["status"] == "dispatched"
     assert updated["needs"]["pumping"] is True and updated["needs"]["supplies"] is False
     assert updated["created_at"] == "2026-10-04T10:00:00Z"
-    assert updated["updated_at"] == "2026-10-04T10:05:00Z"
+    assert updated["updated_at"] == "2026-10-04T10:05:00.250Z"  # milliseconds: see the next test
     assert db.update_report(42, {"status": "resolved"}) is None
+
+
+def test_updates_in_the_same_millisecond_are_still_ordered(db_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Without an AI key, "pending" and "failed" land within a millisecond or two of each other.
+    # Dashboards keep the copy with the newest updated_at (an HTTP response can arrive after the
+    # live event), so every write needs a strictly later stamp, even when the clock has not moved.
+    monkeypatch.setattr(db, "_last_write_ms", 0)
+    monkeypatch.setattr(db, "_now_ms", lambda: 1_791_108_300_250)
+    db.insert_report({})
+    pending = db.update_report(1, {"ai_status": "pending"})
+    failed = db.update_report(1, {"ai_status": "failed"})
+    assert pending is not None and failed is not None
+    assert pending["updated_at"] == "2026-10-04T10:05:00.250Z"
+    assert failed["updated_at"] == "2026-10-04T10:05:00.251Z"
+    assert util.parse_iso(failed["updated_at"]) > util.parse_iso(pending["updated_at"])
 
 
 def test_list_count_clear_restarts_ids(db_env: Any) -> None:
